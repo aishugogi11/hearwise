@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Secrets — NEVER commit these
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Local database (may contain OAuth tokens)
+data/
+data/*.db
+data/*.db-journal
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.claude/
+
+# Logs
+*.log
+npm-debug.log*

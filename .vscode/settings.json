@@ -1,0 +1,25 @@
+{
+  "files.exclude": {
+    "**/.DS_Store": true,
+    "**/.claude": true,
+    "node_modules": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/package-lock.json": true
+  },
+  "explorer.sortOrder": "type",
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.expand": false,
+  "explorer.fileNesting.patterns": {
+    "index.html": "demo-profiles.js, hearing-future.js, coach-engine.js, session-classifier.js, listening-sessions.js, challenges.js, ml-client.js",
+    "server.js": "live-monitoring.js, demo-profiles.js",
+    "package.json": "package-lock.json, .env.example",
+    "README.md": "docs/START_HERE.md, docs/ARCHITECTURE_SUMMARY.md"
+  },
+  "files.associations": {
+    "*.md": "markdown"
+  },
+  "editor.formatOnSave": false,
+  "javascript.validate.enable": true
+}

@@ -1,0 +1,27 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Start HearWise Server",
+      "program": "${workspaceFolder}/server.js",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env.example"
+    },
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Open HearWise in Chrome",
+      "url": "http://127.0.0.1:3000",
+      "webRoot": "${workspaceFolder}"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "HearWise: Server + Browser",
+      "configurations": ["Start HearWise Server", "Open HearWise in Chrome"],
+      "stopAll": true
+    }
+  ]
+}

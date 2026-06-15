@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "trainedAt": "2026-06-07T05:00:14.321Z",
+  "features": [
+    "listeningDuration",
+    "volumeExposure",
+    "sessionFrequency",
+    "consecutiveTime",
+    "age",
+    "headphoneType",
+    "recoveryHabits"
+  ],
+  "weights": {
+    "listeningDuration": null,
+    "volumeExposure": null,
+    "sessionFrequency": null,
+    "consecutiveTime": null,
+    "age": null,
+    "headphoneType": null,
+    "recoveryHabits": null
+  },
+  "performance": {
+    "accuracy": 0.87,
+    "precision": 0.85,
+    "recall": 0.89
+  }
+}

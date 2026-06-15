@@ -1,0 +1,40 @@
+{
+  "folders": [
+    {
+      "name": "HearWise — App (start here)",
+      "path": "."
+    },
+    {
+      "name": "ML",
+      "path": "ml"
+    },
+    {
+      "name": "Database",
+      "path": "database"
+    },
+    {
+      "name": "Documentation",
+      "path": "docs"
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/.DS_Store": true,
+      "**/.claude": true,
+      "node_modules": true
+    },
+    "search.exclude": {
+      "**/node_modules": true
+    },
+    "explorer.fileNesting.enabled": true,
+    "explorer.fileNesting.expand": false,
+    "explorer.fileNesting.patterns": {
+      "index.html": "demo-profiles.js, hearing-future.js, coach-engine.js, session-classifier.js, listening-sessions.js, challenges.js, ml-client.js",
+      "server.js": "live-monitoring.js",
+      "package.json": "package-lock.json, .env.example"
+    }
+  },
+  "extensions": {
+    "recommendations": []
+  }
+}
