@@ -9,8 +9,36 @@ dotenv.config();
 let db = null;
 let dbType = 'none';
 
-// Try PostgreSQL first
-if (process.env.DB_HOST && process.env.DB_NAME) {
+dotenv.config();
+
+// PostgreSQL via DATABASE_URL (Railway, Render Postgres, etc.)
+if (!db && process.env.DATABASE_URL) {
+  try {
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000
+    });
+
+    pool.on('connect', () => {
+      console.log('✅ Connected to PostgreSQL (DATABASE_URL)');
+    });
+
+    pool.on('error', (err) => {
+      console.error('❌ PostgreSQL error:', err.message);
+    });
+
+    db = pool;
+    dbType = 'postgresql';
+  } catch (err) {
+    console.log('⚠️  DATABASE_URL connection failed, falling back to SQLite:', err.message);
+  }
+}
+
+// PostgreSQL via discrete DB_* vars
+if (!db && process.env.DB_HOST && process.env.DB_NAME) {
   try {
     const pool = new Pool({
       host: process.env.DB_HOST || 'localhost',
@@ -327,6 +355,40 @@ if (!db) {
           created_at TEXT DEFAULT (datetime('now'))
         )
       `);
+
+      sqlite.run(`
+        CREATE TABLE IF NOT EXISTS focus_sessions (
+          id TEXT PRIMARY KEY,
+          user_id TEXT,
+          preset TEXT,
+          focus_minutes INTEGER,
+          break_minutes INTEGER,
+          focus_score REAL,
+          avg_volume REAL,
+          peak_volume REAL,
+          listening_minutes REAL,
+          audio_budget REAL,
+          music_context TEXT,
+          completed_at TEXT,
+          created_at TEXT DEFAULT (datetime('now'))
+        )
+      `);
+
+      sqlite.run(`
+        CREATE TABLE IF NOT EXISTS wellness_snapshots (
+          id TEXT PRIMARY KEY,
+          user_id TEXT,
+          snapshot_date TEXT,
+          wellness_score REAL,
+          focus_score REAL,
+          audio_budget REAL,
+          created_at TEXT DEFAULT (datetime('now')),
+          UNIQUE(user_id, snapshot_date)
+        )
+      `);
+
+      sqlite.run(`CREATE INDEX IF NOT EXISTS idx_focus_sessions_user_id ON focus_sessions(user_id)`);
+      sqlite.run(`CREATE INDEX IF NOT EXISTS idx_wellness_snapshots_user ON wellness_snapshots(user_id, snapshot_date)`);
 
       sqlite.run(`CREATE INDEX IF NOT EXISTS idx_coaching_profiles_user_id ON coaching_profiles(user_id)`);
       sqlite.run(`CREATE INDEX IF NOT EXISTS idx_daily_checkins_user_id ON daily_checkins(user_id)`);

@@ -4,6 +4,10 @@
  * Uses actual listening behavior and calculated risk levels for intelligent alerts
  */
 
+const {
+  featherlessSlackMeetingEnd,
+} = require('./featherless');
+
 class LiveMonitoringService {
   constructor(slackClient, slackApp) {
     this.slackClient = slackClient;
@@ -366,6 +370,15 @@ class LiveMonitoringService {
         const exposureObj = typeof exposure === 'string' ? { level: exposure, dose: 'N/A' } : exposure;
         const recommendation = this.getPersonalizedRecommendation(exposureObj);
         const weeklyExposurePercent = Math.min(100, this.weeklyExposure).toFixed(1);
+        const auraNote = await featherlessSlackMeetingEnd({
+          slackUserId: this.slackUserId,
+          eventType: 'huddle',
+          duration,
+          exposureObj,
+          weeklyExposurePercent,
+          fallbackRecommendation: recommendation,
+        });
+        const finalRec = auraNote || recommendation;
         
         text = `Huddle Complete`;
         blocks = [
@@ -373,7 +386,7 @@ class LiveMonitoringService {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `✅ *Huddle Complete*\n\n*Channel:* <#${channel}>\n*Duration:* ${duration} min\n*Exposure Dose:* ${exposureObj.dose}%\n*Risk Level:* ${exposureObj.level}\n*Weekly Exposure:* ${weeklyExposurePercent}%\n\n*Personalized Recommendation:*\n${recommendation}`
+              text: `✅ *Huddle Complete*\n\n*Channel:* <#${channel}>\n*Duration:* ${duration} min\n*Exposure Dose:* ${exposureObj.dose}%\n*Risk Level:* ${exposureObj.level}\n*Weekly Exposure:* ${weeklyExposurePercent}%\n\n*Aura:*\n${finalRec}`
             }
           }
         ];
@@ -422,6 +435,15 @@ class LiveMonitoringService {
         const exposureObj = typeof exposure === 'string' ? { level: exposure, dose: 'N/A' } : exposure;
         const recommendation = this.getPersonalizedRecommendation(exposureObj);
         const weeklyExposurePercent = Math.min(100, this.weeklyExposure).toFixed(1);
+        const auraNote = await featherlessSlackMeetingEnd({
+          slackUserId: this.slackUserId,
+          eventType: 'call',
+          duration,
+          exposureObj,
+          weeklyExposurePercent,
+          fallbackRecommendation: recommendation,
+        });
+        const finalRec = auraNote || recommendation;
         
         text = `Call Complete`;
         blocks = [
@@ -429,7 +451,7 @@ class LiveMonitoringService {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `✅ *Call Complete*\n\n*Channel:* <#${channel}>\n*Duration:* ${duration} min\n*Exposure Dose:* ${exposureObj.dose}%\n*Risk Level:* ${exposureObj.level}\n*Weekly Exposure:* ${weeklyExposurePercent}%\n\n*Personalized Recommendation:*\n${recommendation}`
+              text: `✅ *Call Complete*\n\n*Channel:* <#${channel}>\n*Duration:* ${duration} min\n*Exposure Dose:* ${exposureObj.dose}%\n*Risk Level:* ${exposureObj.level}\n*Weekly Exposure:* ${weeklyExposurePercent}%\n\n*Aura:*\n${finalRec}`
             }
           }
         ];

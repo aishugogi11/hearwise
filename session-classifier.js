@@ -184,6 +184,48 @@
     }
   }
 
+  function getUserMusicCustom() {
+    try {
+      var raw = localStorage.getItem('hearwise_user_profile');
+      if (!raw) return {};
+      return JSON.parse(raw).sessionMusicCustom || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function parseCustomEntries(text) {
+    return String(text || '').split(/[,;\n]+/).map(function (s) {
+      return s.trim().toLowerCase();
+    }).filter(Boolean);
+  }
+
+  function matchCustomEntries(track, meta, customByMode) {
+    var text = trackContextText(track, meta);
+    var hits = {};
+    MODES.forEach(function (mode) {
+      hits[mode] = [];
+      parseCustomEntries(customByMode[mode]).forEach(function (entry) {
+        if (entry && text.indexOf(entry) >= 0) hits[mode].push(entry);
+      });
+    });
+    return hits;
+  }
+
+  function applyCustomModeBoost(modeScores, track, meta, customByMode) {
+    var hits = matchCustomEntries(track, meta, customByMode || {});
+    var matchedCustom = [];
+    MODES.forEach(function (mode) {
+      if (hits[mode] && hits[mode].length) {
+        modeScores[mode] += 1.55 + hits[mode].length * 0.35;
+        hits[mode].forEach(function (entry) {
+          if (matchedCustom.indexOf(entry) < 0) matchedCustom.push(entry);
+        });
+      }
+    });
+    return matchedCustom;
+  }
+
   function textHasKeyword(text, kw) {
     if (kw === 'pop') return /\bpop\b/.test(text);
     return text.indexOf(kw) >= 0;
@@ -688,9 +730,11 @@
     return scores;
   }
 
-  function resolveMode(styleScores, prefs) {
+  function resolveMode(styleScores, prefs, customByMode, track, meta) {
     var modeScores = { focus: 0, active: 0, sleep: 0 };
-    var hasPrefs = MODES.some(function (m) { return prefs[m] && prefs[m].length; });
+    var hasPrefs = MODES.some(function (m) {
+      return (prefs[m] && prefs[m].length) || parseCustomEntries((customByMode || {})[m]).length;
+    });
     var matchedTags = [];
 
     var modeHints = styleScores._modeHints || {};
@@ -750,11 +794,31 @@
       }
     });
 
-    return { mode: normalizeMode(best), confidence: Math.min(0.98, bestScore), modeScores: modeScores, matchedTags: matchedTags };
+    var matchedCustom = track ? applyCustomModeBoost(modeScores, track, meta, customByMode) : [];
+    if (matchedCustom.length) {
+      MODES.forEach(function (mode) {
+        if (modeScores[mode] > bestScore) {
+          bestScore = modeScores[mode];
+          best = mode;
+        }
+      });
+    }
+
+    return {
+      mode: normalizeMode(best),
+      confidence: Math.min(0.98, bestScore),
+      modeScores: modeScores,
+      matchedTags: matchedTags,
+      matchedCustom: matchedCustom
+    };
   }
 
-  function buildReason(mode, trackName, prefs, matchedTags, contextSource) {
+  function buildReason(mode, trackName, prefs, matchedTags, contextSource, matchedCustom) {
     var fromPlaylist = contextSource ? ' · from "' + contextSource + '"' : '';
+    if (matchedCustom && matchedCustom.length) {
+      return 'Your picks (' + matchedCustom.slice(0, 3).join(', ') + ') → ' +
+        (MODE_LABELS[mode] || mode) + fromPlaylist + ' · "' + trackName + '"';
+    }
     var userTags = (prefs[mode] || []).filter(function (t) { return matchedTags.indexOf(t) >= 0; });
     if (userTags.length) {
       var labels = userTags.map(function (t) { return STYLE_TAGS[t] ? STYLE_TAGS[t].label : t; });
@@ -942,14 +1006,16 @@
       };
     }
 
-    var resolved = resolveMode(styleScores, prefs);
+    var custom = getUserMusicCustom();
+    var resolved = resolveMode(styleScores, prefs, custom, track, meta);
     return {
       mode: resolved.mode,
       confidence: resolved.confidence,
-      reason: buildReason(resolved.mode, trackName, prefs, resolved.matchedTags, contextSource),
+      reason: buildReason(resolved.mode, trackName, prefs, resolved.matchedTags, contextSource, resolved.matchedCustom),
       scores: resolved.modeScores,
       styleScores: styleScores,
       matchedTags: resolved.matchedTags,
+      matchedCustom: resolved.matchedCustom,
       contextSource: contextSource
     };
   }

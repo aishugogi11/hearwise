@@ -7,7 +7,7 @@
       "name": "Start HearWise Server",
       "program": "${workspaceFolder}/server.js",
       "cwd": "${workspaceFolder}",
-      "envFile": "${workspaceFolder}/.env.example"
+      "envFile": "${workspaceFolder}/.env"
     },
     {
       "type": "chrome",

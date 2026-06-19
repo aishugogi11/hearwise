@@ -13,11 +13,56 @@
   var UI_TICK_MS = 1000;
 
   var MODES = {
-    quick: { label: '1-Min Sprint', sprintMins: 1, breakMins: 5, emoji: '⚡', bestFor: 'Quick listening check', tip: '1-min sprint → locked ear rest. Great for a fast session reset.' },
-    studyQuick: { label: '1-Min Focus & Study', sprintMins: 1, breakMins: 5, emoji: '📚', bestFor: 'Quick study & focus check', tip: '1-min study sprint → locked ear rest. Ideal before a deep focus block.' },
-    focus: { label: 'Focus & Study', sprintMins: 90, breakMins: 10, emoji: '🎯', bestFor: 'Study, work & deep focus', tip: '90 min cap aligned with safe-listening guidance — silence breaks are mandatory.' },
-    active: { label: 'Chill & Workout', sprintMins: 45, breakMins: 10, emoji: '🎵', bestFor: 'Everyday listening, R&B & gym', tip: 'Pop, R&B, and workout playlists — keep under 75–80 dB and take ear rests between songs or sets.' },
-    sleep: { label: 'Sleep', sprintMins: 30, breakMins: 5, emoji: '🌙', bestFor: 'Bedtime wind-down', tip: 'Keep under 55 dB — lower volume aids sleep and overnight ear recovery.' }
+    quick: {
+      label: '1-Min Sprint', defaultSprintMins: 1, configurable: false, emoji: '⚡',
+      bestFor: 'Quick listening check',
+      tip: '1-min sprint → locked ear rest. Great for a fast session reset.'
+    },
+    studyQuick: {
+      label: '1-Min Focus & Study', defaultSprintMins: 1, configurable: false, emoji: '📚',
+      bestFor: 'Quick study & focus check',
+      tip: '1-min study sprint → locked ear rest. Ideal before a deep focus block.'
+    },
+    focus: {
+      label: 'Focus & Study', defaultSprintMins: 90, configurable: true, emoji: '🎯',
+      bestFor: 'Study, work & deep focus',
+      tip: 'Set your own sprint length — ear rests stay WHO/NIOSH-aligned for hearing safety.'
+    },
+    active: {
+      label: 'Chill & Workout', defaultSprintMins: 45, configurable: true, emoji: '🎵',
+      bestFor: 'Everyday listening, R&B & gym',
+      tip: 'Choose how long you listen — mandatory ear rests follow health guidelines.'
+    },
+    sleep: {
+      label: 'Sleep', defaultSprintMins: 30, configurable: true, emoji: '🌙',
+      bestFor: 'Bedtime wind-down',
+      tip: 'Keep under 55 dB — break timing is fixed for overnight ear recovery.'
+    }
+  };
+
+  /** Ear-rest durations — fixed from hearing-health research; not user-adjustable. */
+  var RESEARCH_BREAK_MINS = {
+    quick: 5,
+    studyQuick: 5,
+    focus: 10,
+    active: 10,
+    sleep: 5
+  };
+
+  var RESEARCH_BREAK_LABELS = {
+    quick: 'WHO Make Listening Safe — brief pause after quick checks',
+    studyQuick: 'WHO Make Listening Safe — brief pause after quick checks',
+    focus: 'WHO/ITU — 10-min silence gap after sustained listening',
+    active: 'NIOSH — ear rest every ~60 min at moderate levels',
+    sleep: 'Lower stimulation — short quiet recovery between wind-down blocks'
+  };
+
+  var SPRINT_LIMITS = {
+    focus: { min: 15, max: 120 },
+    active: { min: 10, max: 90 },
+    sleep: { min: 15, max: 60 },
+    quick: { min: 1, max: 1 },
+    studyQuick: { min: 1, max: 1 }
   };
 
   var _state = {
@@ -166,18 +211,54 @@
     return 65;
   }
 
+  function getUserSprintPrefs() {
+    try {
+      var raw = localStorage.getItem('hearwise_user_profile');
+      if (!raw) return {};
+      return JSON.parse(raw).sessionSprintMins || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function clampSprintMins(mode, mins) {
+    mode = normalizeMode(mode);
+    var lim = SPRINT_LIMITS[mode] || { min: 10, max: 120 };
+    return Math.max(lim.min, Math.min(lim.max, Math.round(Number(mins) || lim.min)));
+  }
+
+  function getDefaultSprintMins(mode) {
+    var key = normalizeMode(mode);
+    var base = MODES[key] || MODES.focus;
+    return base.defaultSprintMins != null ? base.defaultSprintMins : 45;
+  }
+
+  function getResearchBreakMins(mode) {
+    mode = normalizeMode(mode);
+    return RESEARCH_BREAK_MINS[mode] != null ? RESEARCH_BREAK_MINS[mode] : RESEARCH_BREAK_MINS.focus;
+  }
+
   function getModeConfig(mode) {
-    return MODES[normalizeMode(mode)] || MODES.focus;
+    var key = normalizeMode(mode);
+    var base = MODES[key] || MODES.focus;
+    return Object.assign({}, base, {
+      sprintMins: getSprintMins({ mode: key }),
+      breakMins: getResearchBreakMins(key)
+    });
   }
 
   function getSprintMins(session) {
     var mode = normalizeMode((session && session.mode) || 'focus');
-    return getModeConfig(mode).sprintMins;
+    var prefs = getUserSprintPrefs();
+    if (prefs[mode] != null && !isNaN(Number(prefs[mode]))) {
+      return clampSprintMins(mode, Number(prefs[mode]));
+    }
+    return getDefaultSprintMins(mode);
   }
 
   function getBreakMins(session) {
     var mode = normalizeMode((session && session.mode) || 'focus');
-    return getModeConfig(mode).breakMins || 10;
+    return getResearchBreakMins(mode);
   }
 
   function getActiveSessionMode() {
@@ -187,7 +268,22 @@
   }
 
   function getBreakMinsForMode(mode) {
-    return getBreakMins({ mode: normalizeMode(mode) });
+    return getResearchBreakMins(normalizeMode(mode));
+  }
+
+  function getResearchBreakLabel(mode) {
+    mode = normalizeMode(mode);
+    return RESEARCH_BREAK_LABELS[mode] || RESEARCH_BREAK_LABELS.focus;
+  }
+
+  function getSprintLimitsForMode(mode) {
+    mode = normalizeMode(mode);
+    return SPRINT_LIMITS[mode] || { min: 10, max: 120 };
+  }
+
+  function isModeSprintConfigurable(mode) {
+    var cfg = MODES[normalizeMode(mode)];
+    return !!(cfg && cfg.configurable !== false && SPRINT_LIMITS[normalizeMode(mode)].min !== SPRINT_LIMITS[normalizeMode(mode)].max);
   }
 
   function getModeLabel(mode) {
@@ -230,20 +326,15 @@
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
   }
 
-  /** Productivity score: deep focus at safe volume + breaks + pacing. */
+  /** Session points: completed safe sprint + ear rests taken. */
   function calcProductivityScore(s) {
     if (!s) return 0;
-    var dur = Math.max(1, s.durationMin || 0);
-    var focus = s.focusMinutes || 0;
     var breaks = s.breakCount || 0;
-    var sprint = getSprintMins(s);
+    var completed = s.endedAt ? 1 : 0;
     var cap = getFocusVolCap();
     var volOk = (s.avgVolumePercent || 70) <= cap + 5;
-    var score = 0;
-    score += Math.min(45, Math.round((focus / dur) * 45));
-    score += Math.min(25, breaks * 12);
-    if (volOk) score += 15;
-    if (breaks >= Math.max(1, Math.floor(dur / sprint) - 1) || dur <= sprint) score += 15;
+    var score = completed * 50 + Math.min(50, breaks * 15);
+    if (volOk) score += 10;
     return Math.min(100, Math.round(score));
   }
 
@@ -290,6 +381,9 @@
     }
     a.productivityScore = calcProductivityScore(a);
     a.riskLevel = riskLevel(a.avgVolumePercent, a.durationMin);
+    if (a.riskLevel === 'Safe' && typeof global.hwCompanionOnEvent === 'function') {
+      global.hwCompanionOnEvent('safe_session', { eventId: 'safe_' + a.id + '_' + endAt });
+    }
     store.sessions.unshift(a);
     if (store.sessions.length > 24) store.sessions = store.sessions.slice(0, 24);
     store.active = null;
@@ -378,6 +472,7 @@
 
   function onPlayback(pb) {
     if (!pb) return;
+    if (typeof global.hwShouldRunSafeSessionTimers === 'function' && !global.hwShouldRunSafeSessionTimers()) return;
     if (!isTrackingEnabled() && !pb._demo) return;
 
     var playing = !!(pb.is_playing && pb.item);
@@ -523,7 +618,9 @@
     _state.frozenContinuousMin = null;
     _state.lastNudgeAt = Date.now();
     dismissBreakNudge();
-    if (typeof showXpToast === 'function') showXpToast(25, 'Ear rest complete — hearing protected');
+    if (typeof global.hwCompanionOnEvent !== 'function' && typeof showXpToast === 'function') {
+      showXpToast(25, 'Ear rest complete — hearing protected');
+    }
     if (typeof global.hwQuestOnLsEvent === 'function') {
       var sid = store.active ? store.active.id : 'ls';
       var bc = store.active ? (store.active.breakCount || 0) : 0;
@@ -712,12 +809,13 @@
   function modeLegendHtml(activeMode) {
     return '<div class="ls-mode-legend">' +
       Object.keys(MODES).map(function (key) {
-        var m = MODES[key];
+        var m = getModeConfig(key);
         var active = key === activeMode ? ' ls-mode-legend-active' : '';
         var pulse = key === activeMode && shouldFlashMode(activeMode) ? ' ls-mode-legend-flash' : '';
+        var sprintNote = m.sprintMins + ' min';
         return '<div class="ls-mode-legend-row' + active + pulse + '">' +
           '<strong>' + m.emoji + ' ' + m.label + '</strong>' +
-          '<span class="ls-mode-sprint">' + m.sprintMins + ' min sprint · ' + (m.breakMins || 10) + ' min rest</span>' +
+          '<span class="ls-mode-sprint">' + sprintNote + ' sprint · ' + m.breakMins + ' min rest (fixed)</span>' +
         '</div>';
       }).join('') +
     '</div>';
@@ -773,7 +871,7 @@
         '<span>' + elapsedInSprint + ' / ' + sprint + ' min</span>' +
       '</div>' +
         '<div class="ls-sprint-countdown">' + countdown +
-        '<small>NIOSH/WHO-aligned sprint · ear rest when timer hits zero</small></div>' +
+        '<small>Your sprint length · ' + getResearchBreakMins(s.mode) + '-min ear rest (WHO/NIOSH)</small></div>' +
       '<div class="ls-sprint-track"><div class="ls-sprint-fill" style="width:' + pct + '%"></div></div>' +
     '</div>';
   }
@@ -965,6 +1063,22 @@
     };
   }
 
+  function pauseSafeSessionTracking() {
+    stopUiTick();
+    dismissBreakNudge();
+    _state.pauseStartedAt = null;
+    _state.lastPlayTickAt = null;
+    _state.continuousStart = null;
+    _state.frozenContinuousMin = null;
+    _state.lastSprintNudged = 0;
+    var store = loadStore();
+    if (store.active) {
+      store = finalizeActive(store, Date.now());
+      saveStore(store);
+    }
+    renderAll();
+  }
+
   global.hwLsOnPlayback = onPlayback;
   global.hwLsRenderAll = renderAll;
   global.hwLsRenderHome = renderHome;
@@ -980,7 +1094,21 @@
   global.hwLsGetActiveSessionMode = getActiveSessionMode;
   global.hwLsGetBreakMinsForMode = getBreakMinsForMode;
   global.hwLsGetSprintMinsForMode = getSprintMinsForMode;
+  global.hwLsGetDefaultSprintMinsForMode = getDefaultSprintMins;
+  global.hwLsGetResearchBreakLabelForMode = getResearchBreakLabel;
+  global.hwLsGetSprintLimitsForMode = getSprintLimitsForMode;
+  global.hwLsIsModeSprintConfigurable = isModeSprintConfigurable;
+  global.hwLsSanitizeSessionSprintMins = function (prefs) {
+    var out = {};
+    Object.keys(prefs || {}).forEach(function (mode) {
+      if (!isModeSprintConfigurable(mode)) return;
+      var v = Number(prefs[mode]);
+      if (!isNaN(v)) out[normalizeMode(mode)] = clampSprintMins(mode, v);
+    });
+    return out;
+  };
   global.hwLsGetModeLabel = getModeLabel;
+  global.hwLsPauseSafeSessionTracking = pauseSafeSessionTracking;
 
   document.addEventListener('DOMContentLoaded', function () {
     setTimeout(renderAll, 800);

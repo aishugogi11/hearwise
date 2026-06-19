@@ -21,5 +21,6 @@
     "*.md": "markdown"
   },
   "editor.formatOnSave": false,
-  "javascript.validate.enable": true
+  "javascript.validate.enable": true,
+  "terminal.integrated.cwd": "${workspaceFolder}"
 }

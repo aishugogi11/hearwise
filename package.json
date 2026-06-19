@@ -5,9 +5,13 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "play": "lsof -ti:3000 | xargs kill -9 2>/dev/null || true; SLACK_SOCKET_MODE=false node server.js",
     "dev": "nodemon server.js",
     "train": "node ml/train.js",
     "test": "jest"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
     "@slack/bolt": "^3.15.0",

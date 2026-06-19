@@ -1,0 +1,31 @@
+# Render Blueprint — HearWise web service
+# Dashboard: connect repo → New Blueprint → use this file, then set secrets in the UI.
+services:
+  - type: web
+    name: hearwise
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SQLITE_PATH
+        value: /var/data/hearwise.db
+      - key: SLACK_SOCKET_MODE
+        value: "true"
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: SPOTIFY_CLIENT_ID
+        sync: false
+      - key: SPOTIFY_CLIENT_SECRET
+        sync: false
+      - key: SPOTIFY_REDIRECT_URI
+        sync: false
+      - key: APP_URL
+        sync: false
+    disk:
+      name: hearwise-data
+      mountPath: /var/data
+      sizeGB: 1

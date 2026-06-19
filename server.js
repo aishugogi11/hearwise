@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const fetch = require('node-fetch');
 const session = require('express-session');
 const pool = require('./database/connection');
+const config = require('./config');
 const { v4: uuidv4 } = require('uuid');
 const HearingRiskModel = require('./ml/train');
 const BehavioralAnalyzer = require('./ml/behavioralAnalysis');
@@ -12,24 +13,52 @@ const { getChallengesForProfile, getChallengeById, getAllAchievements } = requir
 const { App } = require('@slack/bolt');
 const { WebClient } = require('@slack/web-api');
 const LiveMonitoringService = require('./live-monitoring');
+const systemVolume = require('./system-volume');
+const {
+  featherlessSlackOverview,
+  featherlessSlackRisk,
+  featherlessSlackSummary,
+} = require('./featherless');
 
 dotenv.config();
+config.validateEnv();
 
 const app = express();
 
-// Spotify OAuth redirect URI uses 127.0.0.1 — normalize host so session cookies persist
-app.use((req, res, next) => {
-  const host = req.headers.host || '';
-  if (host.startsWith('localhost')) {
-    return res.redirect(301, `http://127.0.0.1:3000${req.url}`);
-  }
-  next();
-});
+if (config.isProduction) {
+  app.set('trust proxy', 1);
+}
 
+// Local dev: Spotify redirect URI uses 127.0.0.1 — normalize host so session cookies persist
+if (!config.isProduction) {
+  app.use((req, res, next) => {
+    const host = req.headers.host || '';
+    const port = Number(process.env.PORT) || 3000;
+    if (host.startsWith('localhost')) {
+      return res.redirect(301, `http://127.0.0.1:${port}${req.url}`);
+    }
+    next();
+  });
+}
+
+const allowedOrigins = config.getAllowedOrigins();
 app.use(cors({
-  origin: (origin, cb) => cb(null, true), // allow extension + localhost
+  origin: function (origin, cb) {
+    if (!origin || allowedOrigins.has(origin)) return cb(null, true);
+    if (!config.isProduction) return cb(null, true);
+    return cb(null, false);
+  },
   credentials: true
 }));
+
+if (config.isProduction) {
+  app.use(function (req, res, next) {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+  });
+}
 app.use(express.json());
 
 function parseCookies(req) {
@@ -134,7 +163,10 @@ function parseRetryAfterSeconds(header, fallback) {
 function isSpotifyPlayerStateEndpoint(endpoint) {
   if (!endpoint) return false;
   var path = String(endpoint).split('?')[0];
-  return path === 'me/player';
+  if (path === 'me/player') return true;
+  /* Playback controls (volume, pause, play, skip) must work during read backoff */
+  if (path.indexOf('me/player/') === 0) return true;
+  return false;
 }
 
 function isSpotifyGloballyBackedOff() {
@@ -344,6 +376,41 @@ app.get(['/hearwise', '/hearwise/'], (req, res) => {
   res.redirect(302, '/');
 });
 
+app.get('/health', (req, res) => {
+  res.json({
+    ok: true,
+    env: config.NODE_ENV,
+    db: pool.type || 'unknown',
+    spotify: !!(process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET),
+    slack: !!process.env.SLACK_BOT_TOKEN,
+    systemVolume: systemVolume.isSupported()
+  });
+});
+
+app.get('/api/config', (req, res) => {
+  res.json({
+    production: config.isProduction,
+    demoTools: config.demoToolsEnabled,
+    appUrl: config.getAppUrl(),
+    systemVolume: systemVolume.isSupported()
+  });
+});
+
+const BLOCKED_STATIC = new Set([
+  '/server.js', '/config.js', '/featherless.js', '/system-volume.js', '/package.json', '/package-lock.json',
+  '/.env', '/.env.example', '/render.yaml'
+]);
+const BLOCKED_PREFIXES = ['/database', '/docs', '/.git', '/node_modules', '/.vscode'];
+
+app.use(function (req, res, next) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  const urlPath = decodeURIComponent(req.path || '/');
+  if (BLOCKED_STATIC.has(urlPath)) return res.status(404).end();
+  if (BLOCKED_PREFIXES.some(function (p) { return urlPath.startsWith(p); })) return res.status(404).end();
+  if (urlPath.startsWith('/ml/') && urlPath !== '/ml/model.json') return res.status(404).end();
+  next();
+});
+
 app.use(express.static('.', {
   setHeaders(res, filePath) {
     if (filePath.endsWith('index.html')) {
@@ -352,10 +419,15 @@ app.use(express.static('.', {
   }
 }));
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'hearwise-secret',
+  secret: process.env.SESSION_SECRET || 'hearwise-dev-secret',
   resave: false,
-  saveUninitialized: true,
-  cookie: { secure: false, httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000, sameSite: 'lax' }
+  saveUninitialized: false,
+  cookie: {
+    secure: config.isProduction,
+    httpOnly: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    sameSite: 'lax'
+  }
 }));
 
 app.use(async function (req, res, next) {
@@ -607,13 +679,18 @@ if (process.env.SLACK_BOT_TOKEN) {
   }
 }
 
-if (process.env.SLACK_BOT_TOKEN && process.env.SLACK_APP_LEVEL_TOKEN) {
+const slackSocketModeEnabled =
+  process.env.SLACK_SOCKET_MODE !== 'false' &&
+  process.env.SLACK_BOT_TOKEN &&
+  process.env.SLACK_APP_LEVEL_TOKEN;
+
+if (slackSocketModeEnabled) {
   try {
     slackApp = new App({
       token: process.env.SLACK_BOT_TOKEN,
       appToken: process.env.SLACK_APP_LEVEL_TOKEN,
       socketMode: true,
-      logLevel: 'info',
+      logLevel: 'warn',
     });
     if (!slackClient) slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
     liveMonitoring = new LiveMonitoringService(slackClient, slackApp);
@@ -623,6 +700,8 @@ if (process.env.SLACK_BOT_TOKEN && process.env.SLACK_APP_LEVEL_TOKEN) {
     console.log('Slack Socket Mode disabled:', error.message);
     slackApp = null;
   }
+} else if (process.env.SLACK_BOT_TOKEN && process.env.SLACK_APP_LEVEL_TOKEN) {
+  console.log('ℹ️ Slack Socket Mode off (set SLACK_SOCKET_MODE=true to enable)');
 }
 
 if (!liveMonitoring) {
@@ -652,6 +731,8 @@ if (slackApp) {
   try {
     // Get user's hearing health overview
     const overview = await getHearingHealthOverview(userId);
+    const auraNote = await featherlessSlackOverview(userName, userId, overview);
+    const topLine = auraNote || overview.topRecommendation;
     
     await respond({
       text: `🎧 *HearWise Health Overview for ${userName}*`,
@@ -694,7 +775,7 @@ if (slackApp) {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*Top Recommendation:*\n${overview.topRecommendation}`
+            text: `*Aura:*\n${topLine}`
           }
         },
         {
@@ -748,6 +829,7 @@ slackApp.command('/hearwise risk', async ({ command, ack, respond, client, body 
   
   try {
     const riskAnalysis = await getDetailedRiskAnalysis(userId);
+    const auraNote = await featherlessSlackRisk(userName, userId, riskAnalysis);
     
     await respond({
       text: `📊 *Hearing Risk Assessment for ${userName}*`,
@@ -800,7 +882,9 @@ slackApp.command('/hearwise risk', async ({ command, ack, respond, client, body 
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*Recommendations:*\n${riskAnalysis.recommendations.map(r => `• ${r}`).join('\n')}`
+            text: auraNote
+              ? `*Aura:*\n${auraNote}`
+              : `*Recommendations:*\n${riskAnalysis.recommendations.map(r => `• ${r}`).join('\n')}`
           }
         }
       ]
@@ -823,6 +907,8 @@ slackApp.command('/hearwise summary', async ({ command, ack, respond, client, bo
   
   try {
     const summary = await getListeningSummary(userId, period);
+    const auraNote = await featherlessSlackSummary(userName, userId, period, summary);
+    const insightLine = auraNote || summary.insights;
     
     await respond({
       text: `📈 *${period === 'day' ? 'Daily' : 'Weekly'} Listening Summary for ${userName}*`,
@@ -865,7 +951,7 @@ slackApp.command('/hearwise summary', async ({ command, ack, respond, client, bo
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*Insights:*\n${summary.insights}`
+            text: auraNote ? `*Aura:*\n${insightLine}` : `*Insights:*\n${insightLine}`
           }
         }
       ]
@@ -1489,7 +1575,7 @@ app.get('/api/slack/meeting-status', async (req, res) => {
 });
 
 // Demo: simulate Slack meeting join for testing auto Join Meeting
-app.post('/api/slack/meeting-simulate', (req, res) => {
+app.post('/api/slack/meeting-simulate', config.requireDevRoute, (req, res) => {
   try {
     const { slackUserId, inMeeting } = req.body;
     if (!slackUserId) {
@@ -1507,7 +1593,7 @@ app.post('/api/slack/meeting-simulate', (req, res) => {
 });
 
 // Test Slack notification
-app.post('/api/live-monitoring/test-notification', async (req, res) => {
+app.post('/api/live-monitoring/test-notification', config.requireDevRoute, async (req, res) => {
   try {
     const { slackUserId } = req.body;
 
@@ -1645,6 +1731,7 @@ app.get('/callback', async (req, res) => {
     console.log('Redirecting with spotify_connected=true (user profile resolves in background)');
 
     const oauthState = req.query.state || 'hearwise';
+    const postOrigin = JSON.stringify(config.getAppUrl() || (config.isProduction ? '' : '*'));
 
     if (oauthState === 'extension') {
       return res.send(`<!DOCTYPE html><html><head>
@@ -1660,7 +1747,8 @@ app.get('/callback', async (req, res) => {
         <h1>Spotify Connected!</h1>
         <p>Your HearWise extension is now linked to Spotify.<br>You can close this tab.</p>
         <script>
-          window.opener && window.opener.postMessage({ type: 'spotify_token', token: '${data.access_token}' }, '*');
+          var o = ${postOrigin} || '*';
+          window.opener && window.opener.postMessage({ type: 'spotify_token', token: '${data.access_token}' }, o);
           setTimeout(function() { window.close(); }, 2000);
         </script>
       </body></html>`);
@@ -1681,7 +1769,8 @@ app.get('/callback', async (req, res) => {
         <p>Returning to HearWise…</p>
         <script>
           try {
-            if (window.opener) window.opener.postMessage({ type: 'spotify_connected', sync: '${syncToken}' }, '*');
+            var o = ${postOrigin} || '*';
+            if (window.opener) window.opener.postMessage({ type: 'spotify_connected', sync: '${syncToken}' }, o);
           } catch (_) {}
           setTimeout(function() { window.close(); }, 1200);
         </script>
@@ -1750,19 +1839,133 @@ app.post('/api/spotify/skip', async (req, res) => {
   }
 });
 
-app.put('/api/spotify/volume', async (req, res) => {
+app.put('/api/spotify/pause', async (req, res) => {
   try {
-    const resp = await spotifyApiCall(req, 'https://api.spotify.com/v1/me/player/volume', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ volume_percent: req.body.volume_percent })
-    });
+    await spotifyApiCall(req, 'https://api.spotify.com/v1/me/player/pause', { method: 'PUT' });
     res.json({ success: true });
   } catch (err) {
     if (err.message === 'Not authenticated' || err.message === 'Token refresh failed') {
       return res.status(401).json({ error: 'Not authenticated' });
     }
     res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/spotify/play', async (req, res) => {
+  try {
+    await spotifyApiCall(req, 'https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
+    res.json({ success: true });
+  } catch (err) {
+    if (err.message === 'Not authenticated' || err.message === 'Token refresh failed') {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/spotify/volume', async (req, res) => {
+  try {
+    await restoreSpotifySession(req);
+    if (!req.session.access_token) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const volume = Math.max(0, Math.min(100, parseInt(req.body.volume_percent, 10)));
+    if (Number.isNaN(volume)) {
+      return res.status(400).json({ success: false, error: 'volume_percent required (0–100)' });
+    }
+
+    let deviceId = req.body.device_id || null;
+    let deviceName = null;
+
+    try {
+      const playback = await fetchSpotifyPlaybackState(req, { forceFresh: true });
+      if (!deviceId && playback.device && playback.device.id) {
+        deviceId = playback.device.id;
+        deviceName = playback.device.name;
+      }
+    } catch (e) { /* ignore — fall back to devices list */ }
+
+    if (!deviceId) {
+      const devices = await fetchSpotifyDevices(req);
+      const picked = pickSpotifyDevice(devices);
+      if (picked && picked.id) {
+        deviceId = picked.id;
+        deviceName = picked.name;
+      }
+    }
+
+    async function callVolumeApi(id) {
+      let url = 'https://api.spotify.com/v1/me/player/volume?volume_percent=' + volume;
+      if (id) url += '&device_id=' + encodeURIComponent(id);
+      return spotifyApiCall(req, url, { method: 'PUT' });
+    }
+
+    let resp = await callVolumeApi(deviceId);
+    if (resp.status !== 204 && !resp.ok && deviceId) {
+      console.warn('[Spotify volume] retry without device_id after', resp.status);
+      resp = await callVolumeApi(null);
+    }
+
+    if (resp.status === 204 || resp.ok) {
+      console.log('[Spotify volume] Set to', volume + '%', deviceName ? 'on ' + deviceName : '');
+      return res.json({
+        success: true,
+        volume_percent: volume,
+        device_id: deviceId || undefined,
+        device_name: deviceName || undefined
+      });
+    }
+
+    let errText = '';
+    try { errText = await resp.text(); } catch (e) { /* ignore */ }
+    console.warn('[Spotify volume] failed', resp.status, errText);
+
+    let hint = null;
+    if (resp.status === 403) {
+      hint = 'Spotify Premium is required to change volume remotely. Free accounts cannot use this API.';
+    } else if (resp.status === 404) {
+      hint = 'No active Spotify device found. Start playback in the Spotify desktop app, then try again.';
+    } else if (resp.status === 429) {
+      hint = 'Spotify rate limit — volume change will retry on the next Auto-Pilot check.';
+    }
+
+    return res.status(resp.status >= 400 ? resp.status : 500).json({
+      success: false,
+      error: errText || 'Spotify volume change failed',
+      hint,
+      device_id: deviceId || undefined
+    });
+  } catch (err) {
+    if (err.message === 'Not authenticated' || err.message === 'Token refresh failed') {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/system/volume', async (req, res) => {
+  if (!systemVolume.isSupported()) {
+    return res.json({ available: false });
+  }
+  try {
+    const data = await systemVolume.getSystemVolume();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ available: false, error: err.message });
+  }
+});
+
+app.put('/api/system/volume', async (req, res) => {
+  if (!systemVolume.isSupported()) {
+    return res.status(501).json({ available: false, error: 'System volume control is not supported on this host' });
+  }
+  try {
+    const data = await systemVolume.setSystemVolume(req.body.volume_percent);
+    if (!data.available) return res.status(501).json(data);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ available: false, error: err.message });
   }
 });
 
@@ -3275,24 +3478,46 @@ app.post('/api/coaching/weekly-challenge/progress', async (req, res) => {
   }
 });
 
-app.listen(process.env.PORT || 3000, () => {
-  console.log('🎧 HearWise server running at http://127.0.0.1:3000');
-  setInterval(function () {
-    const mem = process.memoryUsage();
-    console.log(
-      '[Memory]',
-      Math.round(mem.heapUsed / 1024 / 1024) + 'MB heap',
-      '| Spotify API calls:', _spotifyRequestCount,
-      '| 429 count:', _spotify429Count,
-      '| Global backoff:', isSpotifyGloballyBackedOff(),
-      '| Playback cache:', _playbackCache.size,
-      '| Stats cache:', _weeklyStatsCache.size
-    );
-  }, 60000);
+const PORT = Number(process.env.PORT) || 3000;
+const publicUrl = config.getAppUrl() || `http://127.0.0.1:${PORT}`;
+
+const server = app.listen(PORT, () => {
+  console.log(`🎧 HearWise server running at ${publicUrl}`);
+  if (config.isProduction) {
+    console.log('   Production mode — demo routes disabled unless ENABLE_DEMO_TOOLS=true');
+  }
+  if (!config.isProduction) {
+    setInterval(function () {
+      const mem = process.memoryUsage();
+      console.log(
+        '[Memory]',
+        Math.round(mem.heapUsed / 1024 / 1024) + 'MB heap',
+        '| Spotify API calls:', _spotifyRequestCount,
+        '| 429 count:', _spotify429Count,
+        '| Global backoff:', isSpotifyGloballyBackedOff(),
+        '| Playback cache:', _playbackCache.size,
+        '| Stats cache:', _weeklyStatsCache.size
+      );
+    }, 60000);
+  }
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n❌ Port ${PORT} is already in use.`);
+    console.error('   Stop the other server, or run: npm run play');
+    console.error(`   Or manually: lsof -ti:${PORT} | xargs kill -9\n`);
+    process.exit(1);
+  }
+  throw err;
 });
 
 // Start Slack Bolt App (only if configured)
 if (slackApp) {
+  slackApp.error((error) => {
+    console.log('⚠️ Slack app error (non-fatal):', error.message);
+  });
+
   (async () => {
     try {
       await slackApp.start();
@@ -3300,6 +3525,30 @@ if (slackApp) {
     } catch (error) {
       console.log('⚠️ Slack Bolt app failed to start:', error.message);
       console.log('🎧 Web server continues running without Slack integration');
+      slackApp = null;
     }
   })();
 }
+
+process.on('uncaughtException', (err) => {
+  const msg = err && err.message ? err.message : '';
+  if (/socket|SocketMode|Unhandled event/i.test(msg)) {
+    console.warn('⚠️ Slack connection issue — HearWise web app still running at ' + publicUrl);
+    return;
+  }
+  console.error(err);
+  process.exit(1);
+});
+
+function shutdown(signal) {
+  console.log(signal + ' received — shutting down');
+  server.close(function () {
+    pool.close().catch(function () {}).finally(function () {
+      process.exit(0);
+    });
+  });
+  setTimeout(function () { process.exit(1); }, 10000);
+}
+
+process.on('SIGTERM', function () { shutdown('SIGTERM'); });
+process.on('SIGINT', function () { shutdown('SIGINT'); });
