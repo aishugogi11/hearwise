@@ -65,6 +65,17 @@
     aurora_ridge: { id: 'aurora_ridge', name: 'Aurora Ridge', emoji: '🌌', unlock: { streak: 30 } }
   };
 
+  var AVATAR_ACCESSORIES = [
+    { id: 'flower', name: 'Flower', emoji: '🌸', slot: 'hat', cost: 15 },
+    { id: 'bow', name: 'Pink Bow', emoji: '🎀', slot: 'hat', cost: 20 },
+    { id: 'party_hat', name: 'Party Hat', emoji: '🎉', slot: 'hat', cost: 25 },
+    { id: 'glasses', name: 'Cool Glasses', emoji: '👓', slot: 'face', cost: 30 },
+    { id: 'scarf', name: 'Cozy Scarf', emoji: '🧣', slot: 'body', cost: 35 },
+    { id: 'star_badge', name: 'Star Badge', emoji: '⭐', slot: 'body', cost: 40 },
+    { id: 'cape', name: 'Hero Cape', emoji: '🦸', slot: 'body', cost: 60 },
+    { id: 'crown', name: 'Gold Crown', emoji: '👑', slot: 'hat', cost: 80 }
+  ];
+
   var DECOR_SHOP = [
     { id: 'lantern', name: 'Soft Lantern', emoji: '🏮', cost: 30, zone: 'quiet_grove' },
     { id: 'fern', name: 'Green Fern', emoji: '🌿', cost: 25, zone: 'quiet_grove' },
@@ -104,6 +115,7 @@
         echo_bunny: { stage: 0, xp: 0, energy: 88, happiness: 92, unlocked: true, unlockedAt: Date.now() }
       },
       sanctuary: { zones: ['quiet_grove'], decor: [], resonance: 20 },
+      avatar: { owned: [], equipped: { hat: null, face: null, body: null } },
       careTokens: 0,
       streakShields: 0,
       daily: { date: todayKey(), harmonyXpEarned: 0, firstSessionAwarded: false, wellnessAwarded: false },
@@ -123,6 +135,9 @@
       var s = JSON.parse(raw);
       if (!s.companions) return defaultState();
       if (!s.sanctuary) s.sanctuary = defaultState().sanctuary;
+      if (!s.avatar) s.avatar = defaultState().avatar;
+      if (!s.avatar.equipped) s.avatar.equipped = { hat: null, face: null, body: null };
+      if (!s.avatar.owned) s.avatar.owned = [];
       if (!s.stats) s.stats = defaultState().stats;
       if (!s.daily || s.daily.date !== todayKey()) {
         s.daily = { date: todayKey(), harmonyXpEarned: 0, firstSessionAwarded: false, wellnessAwarded: false };
@@ -162,6 +177,31 @@
     if (!c) return '🐰';
     if (data.stage === 0) return c.eggEmoji || '🥚';
     return c.emoji;
+  }
+
+  function getAccessory(id) {
+    return AVATAR_ACCESSORIES.find(function (a) { return a.id === id; }) || null;
+  }
+
+  function avatarEquippedHtml(state, size) {
+    state = state || loadState();
+    var eq = (state.avatar && state.avatar.equipped) || {};
+    var slots = ['hat', 'face', 'body'];
+    return slots.map(function (slot) {
+      var item = eq[slot] ? getAccessory(eq[slot]) : null;
+      if (!item) return '';
+      return '<span class="hw-avatar-acc hw-avatar-acc-' + slot + ' hw-avatar-acc-' + size + '" title="' + esc(item.name) + '">' + item.emoji + '</span>';
+    }).join('');
+  }
+
+  function avatarPreviewHtml(state, size) {
+    state = state || loadState();
+    var active = getActiveCompanion(state);
+    size = size || 'md';
+    return '<div class="hw-avatar-preview hw-avatar-preview-' + size + '">' +
+      avatarEquippedHtml(state, size) +
+      '<span class="hw-avatar-core">' + displayEmoji(active.id, active.data) + '</span>' +
+    '</div>';
   }
 
   function subLevelProgress(data) {
@@ -367,6 +407,7 @@
 
     saveState(state);
     renderCompanionUI(state);
+    renderAvatarStudio(state);
     return state;
   }
 
@@ -381,6 +422,48 @@
     saveState(state);
     renderCompanionUI(state);
     return true;
+  }
+
+  function buyAccessory(accessoryId) {
+    var state = loadState();
+    var item = getAccessory(accessoryId);
+    if (!item) return { ok: false, reason: 'unknown' };
+    if (!state.avatar) state.avatar = defaultState().avatar;
+    if (state.avatar.owned.indexOf(accessoryId) >= 0) return { ok: false, reason: 'owned' };
+    if (state.sanctuary.resonance < item.cost) return { ok: false, reason: 'insufficient' };
+    state.sanctuary.resonance -= item.cost;
+    state.avatar.owned.push(accessoryId);
+    state.avatar.equipped[item.slot] = accessoryId;
+    state.lastNote = item.emoji + ' ' + item.name + ' equipped on your companion!';
+    saveState(state);
+    renderAvatarStudio(state);
+    renderCompanionUI(state);
+    return { ok: true, item: item };
+  }
+
+  function equipAccessory(accessoryId) {
+    var state = loadState();
+    var item = getAccessory(accessoryId);
+    if (!item) return { ok: false, reason: 'unknown' };
+    if (!state.avatar || state.avatar.owned.indexOf(accessoryId) < 0) return { ok: false, reason: 'not_owned' };
+    state.avatar.equipped[item.slot] = accessoryId;
+    state.lastNote = item.emoji + ' ' + item.name + ' equipped.';
+    saveState(state);
+    renderAvatarStudio(state);
+    renderCompanionUI(state);
+    return { ok: true, item: item };
+  }
+
+  function unequipAccessory(slot) {
+    var state = loadState();
+    if (!state.avatar || !state.avatar.equipped) return { ok: false, reason: 'empty' };
+    if (!state.avatar.equipped[slot]) return { ok: false, reason: 'empty' };
+    state.avatar.equipped[slot] = null;
+    state.lastNote = 'Accessory removed.';
+    saveState(state);
+    renderAvatarStudio(state);
+    renderCompanionUI(state);
+    return { ok: true };
   }
 
   function buyDecor(decorId) {
@@ -429,6 +512,8 @@
       resonance: state.sanctuary.resonance,
       zones: state.sanctuary.zones.slice(),
       decor: state.sanctuary.decor.slice(),
+      avatarOwned: (state.avatar && state.avatar.owned) ? state.avatar.owned.slice() : [],
+      avatarEquipped: Object.assign({ hat: null, face: null, body: null }, state.avatar && state.avatar.equipped),
       stats: Object.assign({}, state.stats),
       streak: coaching.streak || 0,
       lastNote: state.lastNote,
@@ -458,7 +543,7 @@
     var moodTxt = mood === 'content' ? 'Happy & growing' : mood === 'quiet' ? 'Resting — a session helps' : 'Send care — ear rest helps most';
     return '<div class="hw-companion-card" id="hwCompanionCard">' +
       '<div class="hw-companion-main">' +
-        '<div class="hw-companion-avatar" title="' + esc(active.def.name) + '">' + displayEmoji(active.id, active.data) + '</div>' +
+        '<div class="hw-companion-avatar" title="' + esc(active.def.name) + '">' + avatarPreviewHtml(state, 'sm') + '</div>' +
         '<div class="hw-companion-info">' +
           '<div class="hw-companion-name">' + esc(stageName(active.id, active.data.stage)) + '</div>' +
           '<div class="hw-companion-mood">' + moodTxt + '</div>' +
@@ -474,7 +559,8 @@
         '<span class="hw-companion-token">🌸 ' + state.careTokens + ' Care</span>' +
         '<span class="hw-companion-token">✨ ' + state.sanctuary.resonance + ' Resonance</span>' +
         (state.streakShields ? '<span class="hw-companion-token">🛡️ ' + state.streakShields + '</span>' : '') +
-        '<button type="button" class="hw-companion-btn" onclick="hwOpenSanctuary()">Sanctuary</button>' +
+        '<button type="button" class="hw-companion-btn" onclick="hwOpenAvatarStudio()">Decorate</button>' +
+        '<button type="button" class="hw-companion-btn secondary" onclick="hwOpenSanctuary()">Sanctuary</button>' +
         (state.careTokens >= 3 ? '<button type="button" class="hw-companion-btn secondary" onclick="hwCompanionUseCare()">Care</button>' : '') +
       '</div>' +
       (state.lastNote ? '<div class="hw-companion-note">' + esc(state.lastNote) + '</div>' : '') +
@@ -543,6 +629,53 @@
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
   }
 
+  function avatarStudioHtml(state) {
+    state = state || loadState();
+    var active = getActiveCompanion(state);
+    var owned = (state.avatar && state.avatar.owned) || [];
+    var equipped = (state.avatar && state.avatar.equipped) || { hat: null, face: null, body: null };
+
+    var shopHtml = AVATAR_ACCESSORIES.map(function (item) {
+      var isOwned = owned.indexOf(item.id) >= 0;
+      var isEquipped = equipped[item.slot] === item.id;
+      var btnLabel = isEquipped ? 'Equipped ✓' : isOwned ? 'Equip' : item.cost + ' ✨';
+      var onclick = isEquipped
+        ? 'hwAvatarUnequip(\'' + item.slot + '\')'
+        : isOwned
+          ? 'hwAvatarEquip(\'' + item.id + '\')'
+          : 'hwAvatarBuy(\'' + item.id + '\')';
+      return '<button type="button" class="hw-avatar-shop-item' + (isOwned ? ' owned' : '') + (isEquipped ? ' equipped' : '') + '" onclick="' + onclick + '">' +
+        '<span class="hw-avatar-shop-emoji">' + item.emoji + '</span>' +
+        '<span class="hw-avatar-shop-name">' + esc(item.name) + '</span>' +
+        '<span class="hw-avatar-shop-cost">' + btnLabel + '</span>' +
+      '</button>';
+    }).join('');
+
+    return '<div class="hw-avatar-studio-card">' +
+      '<div class="hw-avatar-studio-hd">' +
+        '<div><div class="hw-avatar-studio-title">🎨 Companion Studio</div>' +
+        '<div class="hw-avatar-studio-sub">Earn Resonance from ear rests, quests, and evolutions — spend it to dress up your companion.</div></div>' +
+        '<span class="hw-companion-token">✨ ' + state.sanctuary.resonance + ' Resonance</span>' +
+      '</div>' +
+      '<div class="hw-avatar-studio-preview">' +
+        avatarPreviewHtml(state, 'lg') +
+        '<div class="hw-avatar-studio-meta">' +
+          '<div class="hw-avatar-studio-name">' + esc(stageName(active.id, active.data.stage)) + '</div>' +
+          '<div class="hw-avatar-studio-hint">Your personal progress — no competing with others.</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="hw-sanc-section-label">Accessories · hat · face · body</div>' +
+      '<div class="hw-avatar-shop">' + shopHtml + '</div>' +
+      (state.lastNote ? '<div class="hw-companion-note">' + esc(state.lastNote) + '</div>' : '') +
+    '</div>';
+  }
+
+  function renderAvatarStudio(state) {
+    state = state || loadState();
+    var mount = document.getElementById('hwAvatarStudioMount');
+    if (mount) mount.innerHTML = avatarStudioHtml(state);
+  }
+
   function renderCompanionUI(state) {
     state = state || loadState();
     var mount = document.getElementById('hwCompanionMount');
@@ -566,14 +699,22 @@
 
   function ensureSanctuaryMount() {
     if (!document.getElementById('hwCompanionMount')) {
-      var mission = document.getElementById('wpMissionCard');
-      if (mission) {
-        var mount = document.createElement('div');
-        mount.id = 'hwCompanionMount';
-        mount.className = 'hw-companion-mount';
-        var phase = document.getElementById('wpMissionPhase');
-        if (phase && phase.parentNode) phase.parentNode.insertBefore(mount, phase.nextSibling);
-        else mission.insertBefore(mount, mission.children[1] || null);
+      var betaWrap = document.getElementById('hwBetaCompanionMount');
+      if (betaWrap) {
+        var betaMount = document.createElement('div');
+        betaMount.id = 'hwCompanionMount';
+        betaMount.className = 'hw-companion-mount';
+        betaWrap.appendChild(betaMount);
+      } else {
+        var mission = document.getElementById('wpMissionCard');
+        if (mission) {
+          var mount = document.createElement('div');
+          mount.id = 'hwCompanionMount';
+          mount.className = 'hw-companion-mount';
+          var phase = document.getElementById('wpMissionPhase');
+          if (phase && phase.parentNode) phase.parentNode.insertBefore(mount, phase.nextSibling);
+          else mission.insertBefore(mount, mission.children[1] || null);
+        }
       }
     }
     if (!document.getElementById('hwCompanionQuestStrip')) {
@@ -594,6 +735,7 @@
     tickIdleEnergy(state);
     saveState(state);
     renderCompanionUI(state);
+    renderAvatarStudio(state);
   }
 
   var ProgressionModule = {
@@ -603,7 +745,11 @@
     saveState: saveState,
     enrichCoachPlan: enrichCoachPlan,
     renderUI: renderCompanionUI,
+    renderAvatarStudio: renderAvatarStudio,
     useCareTokens: useCareTokens,
+    buyAccessory: buyAccessory,
+    equipAccessory: equipAccessory,
+    unequipAccessory: unequipAccessory,
     buyDecor: buyDecor,
     setActiveCompanion: setActiveCompanion,
     onStreakExtended: onStreakExtended,
@@ -611,11 +757,29 @@
     COMPANIONS: COMPANIONS,
     ZONES: ZONES,
     DECOR_SHOP: DECOR_SHOP,
+    AVATAR_ACCESSORIES: AVATAR_ACCESSORIES,
     init: init
   };
 
   global.hwCompanionProgression = ProgressionModule;
   global.hwCompanionOnEvent = function (type, meta) { return ProgressionModule.onEvent(type, meta); };
+  global.hwOpenAvatarStudio = function () {
+    if (typeof global.hwSwitchTab === 'function') global.hwSwitchTab('progress');
+    setTimeout(function () {
+      renderAvatarStudio(loadState());
+      var wrap = document.getElementById('hwAvatarStudioWrap');
+      if (wrap) wrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 200);
+  };
+  global.hwAvatarBuy = function (id) {
+    var r = buyAccessory(id);
+    if (!r.ok && typeof global.showNotification === 'function') {
+      if (r.reason === 'insufficient') global.showNotification('Need more Resonance ✨ — complete ear rests and daily quests.');
+      else if (r.reason === 'owned') global.showNotification('You already own that accessory.');
+    }
+  };
+  global.hwAvatarEquip = function (id) { equipAccessory(id); };
+  global.hwAvatarUnequip = function (slot) { unequipAccessory(slot); };
   global.hwOpenSanctuary = function () {
     renderSanctuaryModal(loadState());
   };

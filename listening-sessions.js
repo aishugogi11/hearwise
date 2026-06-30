@@ -24,9 +24,9 @@
       tip: '1-min study sprint → locked ear rest. Ideal before a deep focus block.'
     },
     focus: {
-      label: 'Focus & Study', defaultSprintMins: 90, configurable: true, emoji: '🎯',
+      label: 'Focus & Study', defaultSprintMins: 25, configurable: true, emoji: '🎯',
       bestFor: 'Study, work & deep focus',
-      tip: 'Set your own sprint length — ear rests stay WHO/NIOSH-aligned for hearing safety.'
+      tip: 'Pomodoro sprints while Spotify plays — short breaks between cycles, WHO ear rest every 4 pomodoros.'
     },
     active: {
       label: 'Chill & Workout', defaultSprintMins: 45, configurable: true, emoji: '🎵',
@@ -65,6 +65,16 @@
     studyQuick: { min: 1, max: 1 }
   };
 
+  /** Pomodoro presets — shared with focus orchestrator (25/5 default for study sessions). */
+  var POMODORO_PRESETS = {
+    '25/5': { id: '25/5', focusMin: 25, breakMin: 5, label: '25 / 5' },
+    '50/10': { id: '50/10', focusMin: 50, breakMin: 10, label: '50 / 10' },
+    '90/15': { id: '90/15', focusMin: 90, breakMin: 15, label: '90 / 15' }
+  };
+  var POMODORO_PRESET_KEY = 'hearwise_pomodoro_preset';
+  var POMODORO_WHO_EVERY = 4;
+  var POMODORO_MODES = { focus: true, study: true };
+
   var _state = {
     pauseStartedAt: null,
     continuousStart: null,
@@ -74,24 +84,78 @@
     uiTick: null,
     frozenContinuousMin: null,
     lastHighlightedMode: null,
-    modeFlashUntil: 0
+    modeFlashUntil: 0,
+    breakPauseInProgress: false,
+    sprintAwaitingContinue: false,
+    frozenListeningMin: null,
+    sprintHoldingForBreak: false
   };
+
+  function isSprintTimerHeld() {
+    return _state.sprintAwaitingContinue || _state.sprintHoldingForBreak ||
+      _state.breakPauseInProgress || isBreakLocked();
+  }
+
+  function holdSprintForBreak(store, now) {
+    if (!store || !store.active) return;
+    refreshActiveMetrics(store, now);
+    _state.frozenContinuousMin = store.active.continuousMin || 0;
+    _state.frozenListeningMin = null;
+    _state.pauseStartedAt = null;
+    _state.sprintHoldingForBreak = true;
+    saveStore(store);
+  }
+
+  function isSpotifyPaused() {
+    if (isBreakLocked() || _state.sprintAwaitingContinue || _state.breakPauseInProgress) return false;
+    if (_state.pauseStartedAt == null) return false;
+    var pb = typeof global._lpLastPlayback !== 'undefined' ? global._lpLastPlayback : null;
+    if (pb && pb.is_playing && pb.item) return false;
+    return true;
+  }
+
+  function snapshotListeningPause(store, now) {
+    if (!store.active || isBreakLocked() || _state.sprintAwaitingContinue) return;
+    refreshActiveMetrics(store, now);
+    _state.frozenListeningMin = store.active.continuousMin || 0;
+  }
+
+  function resumeListeningTimer(now) {
+    if (_state.frozenListeningMin == null || isBreakLocked()) return;
+    _state.continuousStart = now - _state.frozenListeningMin * 60000;
+    _state.frozenListeningMin = null;
+  }
 
   function shouldFlashMode(mode) {
     return _state.modeFlashUntil > Date.now() && _state.lastHighlightedMode === mode;
   }
 
-  function notifyModeHighlight(mode, forceFlash) {
+  function notifyModeHighlight(mode, forceFlash, opts) {
+    opts = opts || {};
     if (!mode) return;
     var changed = mode !== _state.lastHighlightedMode;
     if (!changed && !forceFlash) return;
 
-    if (typeof global.auraSyncSessionBreakTimer === 'function') {
+    if (typeof global.hwLsHasActiveSession === 'function' && global.hwLsHasActiveSession()) {
+      if (typeof global.auraClearSessionBreakTimer === 'function') {
+        global.auraClearSessionBreakTimer();
+      }
+    } else if (typeof global.auraSyncSessionBreakTimer === 'function') {
       global.auraSyncSessionBreakTimer(mode);
     }
 
     _state.lastHighlightedMode = mode;
     _state.modeFlashUntil = Date.now() + 2200;
+
+    if (opts.manual) return;
+
+    var inActiveSprint = typeof global.hwLsHasActiveSession === 'function' && global.hwLsHasActiveSession() &&
+      !(typeof isEarRestBreakActive === 'function' && isEarRestBreakActive());
+    if (inActiveSprint) return;
+
+    if (typeof global.auraPrepareSessionBreakTimer === 'function') {
+      global.auraPrepareSessionBreakTimer(mode, { openCoach: changed, speak: changed, skipSync: true });
+    }
 
     if (changed) {
       var needsSurvey = typeof global.needsMusicGenreSurvey === 'function' && global.needsMusicGenreSurvey();
@@ -117,9 +181,6 @@
             recoveryTab.classList.remove('hw-tab-mode-pulse');
           }, 2200);
         }
-      }
-      if (typeof global.auraPrepareSessionBreakTimer === 'function') {
-        global.auraPrepareSessionBreakTimer(mode, { openCoach: changed, speak: changed, skipSync: true });
       }
     }, delay);
   }
@@ -211,6 +272,50 @@
     return 65;
   }
 
+  function getPomodoroPresetId() {
+    try {
+      var id = localStorage.getItem(POMODORO_PRESET_KEY);
+      if (id && POMODORO_PRESETS[id]) return id;
+    } catch (e) { /* ignore */ }
+    return '25/5';
+  }
+
+  function getPomodoroPreset() {
+    return POMODORO_PRESETS[getPomodoroPresetId()] || POMODORO_PRESETS['25/5'];
+  }
+
+  function isPomodoroMode(mode) {
+    return !!POMODORO_MODES[normalizeMode(mode)];
+  }
+
+  function usesPomodoro(session) {
+    var mode = normalizeMode((session && session.mode) || (session && session.detectedMode) || 'focus');
+    return isPomodoroMode(mode);
+  }
+
+  function setPomodoroPreset(id, opts) {
+    opts = opts || {};
+    if (!POMODORO_PRESETS[id]) return;
+    try { localStorage.setItem(POMODORO_PRESET_KEY, id); } catch (e) { /* ignore */ }
+    if (!opts.skipOrch && typeof global.hwOrcSelectPreset === 'function') {
+      global.hwOrcSelectPreset(id, { skipLs: true });
+    }
+    var store = loadStore();
+    if (store.active && usesPomodoro(store.active)) {
+      store.active.pomodoroPresetId = id;
+      _state.lastSprintNudged = Math.floor((store.active.continuousMin || 0) / getSprintMins(store.active));
+      saveStore(store);
+    }
+    renderAll();
+  }
+
+  function nextBreakKind(session) {
+    if (!usesPomodoro(session)) return 'ear';
+    var nextPom = ((session && session.pomodoroCount) || 0) + 1;
+    if (nextPom % POMODORO_WHO_EVERY === 0) return 'who';
+    return 'pomodoro';
+  }
+
   function getUserSprintPrefs() {
     try {
       var raw = localStorage.getItem('hearwise_user_profile');
@@ -249,6 +354,9 @@
 
   function getSprintMins(session) {
     var mode = normalizeMode((session && session.mode) || 'focus');
+    if (isPomodoroMode(mode)) {
+      return getPomodoroPreset().focusMin;
+    }
     var prefs = getUserSprintPrefs();
     if (prefs[mode] != null && !isNaN(Number(prefs[mode]))) {
       return clampSprintMins(mode, Number(prefs[mode]));
@@ -258,6 +366,12 @@
 
   function getBreakMins(session) {
     var mode = normalizeMode((session && session.mode) || 'focus');
+    if (usesPomodoro(session || { mode: mode })) {
+      if (nextBreakKind(session || { mode: mode, pomodoroCount: 0 }) === 'who') {
+        return getResearchBreakMins(mode);
+      }
+      return getPomodoroPreset().breakMin;
+    }
     return getResearchBreakMins(mode);
   }
 
@@ -282,8 +396,10 @@
   }
 
   function isModeSprintConfigurable(mode) {
-    var cfg = MODES[normalizeMode(mode)];
-    return !!(cfg && cfg.configurable !== false && SPRINT_LIMITS[normalizeMode(mode)].min !== SPRINT_LIMITS[normalizeMode(mode)].max);
+    mode = normalizeMode(mode);
+    if (isPomodoroMode(mode)) return false;
+    var cfg = MODES[mode];
+    return !!(cfg && cfg.configurable !== false && SPRINT_LIMITS[mode].min !== SPRINT_LIMITS[mode].max);
   }
 
   function getModeLabel(mode) {
@@ -350,6 +466,12 @@
     _state.lastPlayTickAt = now;
   }
 
+  function sprintElapsedMin(session) {
+    if (!session) return 0;
+    if (session.continuousMin != null && !isNaN(session.continuousMin)) return session.continuousMin;
+    return session.durationMin || 0;
+  }
+
   function refreshActiveMetrics(store, now) {
     var a = store.active;
     if (!a) return;
@@ -357,8 +479,10 @@
       a.avgVolumePercent = Math.round(a.volumeSum / a.volumeCount);
     }
     a.durationMin = (now - a.startedAt) / 60000;
-    if (isBreakLocked() && _state.frozenContinuousMin != null) {
+    if (_state.frozenContinuousMin != null && isSprintTimerHeld()) {
       a.continuousMin = _state.frozenContinuousMin;
+    } else if (isSpotifyPaused() && _state.frozenListeningMin != null) {
+      a.continuousMin = _state.frozenListeningMin;
     } else if (_state.continuousStart) {
       a.continuousMin = (now - _state.continuousStart) / 60000;
     } else {
@@ -390,6 +514,9 @@
     _state.continuousStart = null;
     _state.lastPlayTickAt = null;
     _state.lastSprintNudged = 0;
+    _state.frozenListeningMin = null;
+    _state.pauseStartedAt = null;
+    _state.sprintHoldingForBreak = false;
     return store;
   }
 
@@ -420,6 +547,8 @@
       breakCount: 0,
       focusMinutes: 0,
       sprintsCompleted: 0,
+      pomodoroCount: 0,
+      pomodoroPresetId: getPomodoroPresetId(),
       productivityScore: 0,
       continuousMin: 0,
       durationMin: 0,
@@ -442,6 +571,9 @@
     _state.continuousStart = now;
     _state.lastPlayTickAt = now;
     _state.lastSprintNudged = 0;
+    if (typeof global.hwUpdateSpotifyPollCadence === 'function') {
+      global.hwUpdateSpotifyPollCadence();
+    }
     return store;
   }
 
@@ -482,11 +614,14 @@
     if (playing) {
       if (_state.pauseStartedAt) {
         var pauseDur = now - _state.pauseStartedAt;
-        if (store.active && pauseDur >= BREAK_MS && pauseDur < SESSION_GAP_MS) {
+        if (store.active && !isBreakLocked() && pauseDur >= BREAK_MS && pauseDur < SESSION_GAP_MS) {
           store.active.breakCount = (store.active.breakCount || 0) + 1;
           store.active.sprintsCompleted = store.active.breakCount;
           _state.continuousStart = now;
+          _state.frozenListeningMin = null;
           _state.lastSprintNudged = Math.floor((store.active.continuousMin || 0) / getSprintMins(store.active));
+        } else if (store.active && !isBreakLocked()) {
+          resumeListeningTimer(now);
         }
         if (store.active && pauseDur >= SESSION_GAP_MS) {
           store = finalizeActive(store, _state.pauseStartedAt);
@@ -499,13 +634,16 @@
         if (pb.item && typeof hwSessionClassifierOnTrack === 'function') {
           hwSessionClassifierOnTrack(pb, store, { force: true, isNewSession: true });
         }
+        saveStore(store);
+        renderAll();
       } else {
         store = updateActiveFromPlayback(store, pb, now);
       }
       startUiTick();
     } else {
       _state.lastPlayTickAt = null;
-      if (store.active && !_state.pauseStartedAt) {
+      if (store.active && !_state.pauseStartedAt && !isBreakLocked() && !_state.breakPauseInProgress) {
+        snapshotListeningPause(store, now);
         _state.pauseStartedAt = now;
       }
       if (store.active && _state.pauseStartedAt && (now - _state.pauseStartedAt) >= SESSION_GAP_MS) {
@@ -521,11 +659,11 @@
   }
 
   function checkProductivityNudges(store, now) {
-    if (isBreakLocked()) return;
+    if (isSprintTimerHeld() || isSpotifyPaused()) return;
     var a = store.active;
     if (!a) return;
     refreshActiveMetrics(store, now);
-    var cont = a.continuousMin || a.durationMin || 0;
+    var cont = sprintElapsedMin(a);
     var sprint = getSprintMins(a);
     var sprintIndex = Math.floor(cont / sprint);
 
@@ -535,14 +673,27 @@
         _state.lastSprintNudged = sprintIndex;
         var modeCfg = getModeConfig(effectiveSessionMode(a));
         var brk = getBreakMins(a);
-        if (typeof global.hwQuestOnLsEvent === 'function') {
-          global.hwQuestOnLsEvent('sprint', { eventId: 'sprint_' + a.id + '_' + sprintIndex, sprintIndex: sprintIndex });
+        var breakKind = nextBreakKind(a);
+        if (usesPomodoro(a)) {
+          a.pendingBreakMins = brk;
+          a.pendingBreakKind = breakKind;
+          a.pomodoroCount = (a.pomodoroCount || 0) + 1;
+          saveStore(store);
         }
-        triggerAutoFocusBreak(
-          modeCfg.emoji + ' <strong>' + modeCfg.label + ' sprint complete</strong> (' + sprint + ' min). ' +
-          'Starting your ' + brk + '-minute ear rest — take headphones off while the timer runs.',
-          true
-        );
+        if (typeof global.hwQuestOnLsEvent === 'function') {
+          global.hwQuestOnLsEvent('sprint', {
+            eventId: 'sprint_' + a.id + '_' + sprintIndex,
+            sprintIndex: sprintIndex,
+            pomodoro: usesPomodoro(a) ? a.pomodoroCount : null
+          });
+        }
+        var sprintLabel = usesPomodoro(a)
+          ? '🍅 <strong>Pomodoro ' + a.pomodoroCount + ' complete</strong> (' + sprint + ' min focus)'
+          : modeCfg.emoji + ' <strong>' + modeCfg.label + ' sprint complete</strong> (' + sprint + ' min)';
+        var breakLabel = breakKind === 'who'
+          ? 'Starting your ' + brk + '-minute WHO ear rest — take headphones off.'
+          : 'Starting your ' + brk + '-minute break — silence while the timer runs.';
+        triggerAutoFocusBreak(sprintLabel + '. ' + breakLabel, true);
         return;
       }
     }
@@ -559,8 +710,14 @@
   }
 
   function triggerAutoFocusBreak(msg, isSprint) {
+    var store = loadStore();
+    holdSprintForBreak(store, Date.now());
     if (typeof global.hwPlayAlertRing === 'function') global.hwPlayAlertRing('break');
     showBreakNudge(msg, isSprint);
+    startFocusBreak();
+  }
+
+  function breakNudgeAction() {
     startFocusBreak();
   }
 
@@ -571,7 +728,9 @@
       els.txt.innerHTML = msg;
       els.el.classList.add('visible');
       els.el.classList.toggle('ls-sprint-nudge', !!isSprint);
-      if (title) title.textContent = isBreakLocked() ? '⏸ Ear rest in progress' : 'Ear rest required';
+      if (title) {
+        title.textContent = isBreakLocked() ? '⏸ Ear rest in progress' : 'Ear rest required';
+      }
     }
     updateBreakNudgeUI();
     if (!isBreakLocked() && !isSprint && typeof auraSuggestEarRest === 'function') {
@@ -592,11 +751,13 @@
       els.btn.style.display = 'none';
       els.el.classList.add('visible');
       if (els.txt && typeof wpTimerSecs !== 'undefined') {
-        els.txt.innerHTML = 'Ear rest — <strong>' + formatTimerSecs(wpTimerSecs) + '</strong> remaining. ' +
+        els.txt.innerHTML = 'Spotify paused — ear rest <strong>' + formatTimerSecs(wpTimerSecs) + '</strong> remaining. ' +
           'Take headphones off — your cochlea recovers fastest in silence.';
       }
     } else {
       els.btn.style.display = '';
+      els.btn.textContent = 'Start rest ▶';
+      els.btn.classList.remove('ls-break-continue');
     }
     var store = loadStore();
     renderEarAiInsight(store);
@@ -608,14 +769,17 @@
   }
 
   function logBreakComplete() {
+    _state.sprintAwaitingContinue = false;
     var store = loadStore();
     if (store.active) {
+      store.active.awaitingBreakContinue = false;
       store.active.breakCount = (store.active.breakCount || 0) + 1;
       store.active.sprintsCompleted = store.active.breakCount;
       saveStore(store);
     }
     _state.continuousStart = Date.now();
     _state.frozenContinuousMin = null;
+    _state.sprintHoldingForBreak = false;
     _state.lastNudgeAt = Date.now();
     dismissBreakNudge();
     if (typeof global.hwCompanionOnEvent !== 'function' && typeof showXpToast === 'function') {
@@ -638,6 +802,28 @@
     logBreakComplete();
   }
 
+  function pauseSpotifyForBreak(done) {
+    if (typeof global.hwPauseSpotify === 'function') {
+      global.hwPauseSpotify({ notify: false }).then(function (ok) {
+        if (typeof global.hwSpotifyBurstPoll === 'function') global.hwSpotifyBurstPoll();
+        if (done) done(ok);
+      });
+      return;
+    }
+    if (typeof global._spotifyConnected !== 'undefined' && !global._spotifyConnected) {
+      if (done) done(false);
+      return;
+    }
+    fetch('/api/spotify/pause', { method: 'PUT', credentials: 'include' })
+      .then(function (r) {
+        if (r.ok && typeof global.hwMarkSpotifyPausedLocally === 'function') {
+          global.hwMarkSpotifyPausedLocally();
+        }
+        if (done) done(r.ok);
+      })
+      .catch(function () { if (done) done(false); });
+  }
+
   function startFocusBreak() {
     if (isBreakLocked()) return;
     var store = loadStore();
@@ -646,56 +832,154 @@
       _state.frozenContinuousMin = store.active.continuousMin || 0;
       saveStore(store);
     }
-    var breakMins = store.active ? getBreakMins(store.active) : 10;
-    var modeCfg = store.active ? getModeConfig(store.active.mode) : null;
-    if (typeof auraEarRestStart === 'function') {
-      auraEarRestStart(breakMins, false, {
-        lock: false,
-        autoStart: true,
-        source: 'listening',
-        title: 'Ear Rest — ' + breakMins + ' Minutes' + (modeCfg ? ' (' + modeCfg.label + ')' : ''),
-        desc: 'Silence break — headphones off while the timer runs. You can keep using HearWise in the background.'
-      });
+    var breakMins = store.active && store.active.pendingBreakMins != null
+      ? store.active.pendingBreakMins
+      : (store.active ? getBreakMins(store.active) : 10);
+    var breakKind = store.active && store.active.pendingBreakKind
+      ? store.active.pendingBreakKind
+      : (store.active ? nextBreakKind(store.active) : 'ear');
+    if (store.active) {
+      store.active.pendingBreakMins = null;
+      store.active.pendingBreakKind = null;
+      saveStore(store);
     }
-    updateBreakNudgeUI();
-    renderAll();
+    var modeCfg = store.active ? getModeConfig(store.active.mode) : null;
+    var isPom = store.active && usesPomodoro(store.active);
+    var title = breakKind === 'who'
+      ? 'WHO Ear Rest — ' + breakMins + ' Minutes'
+      : (isPom ? 'Pomodoro Break — ' + breakMins + ' Minutes' : 'Ear Rest — ' + breakMins + ' Minutes');
+    if (modeCfg) title += ' (' + modeCfg.label + ')';
+    var breakDesc = isPom && breakKind === 'pomodoro'
+      ? 'Spotify paused. Pomodoro silence break — stretch, hydrate, headphones off. Press play when the timer ends.'
+      : 'Spotify paused. Silence break — headphones off while the timer runs.';
+    _state.pauseStartedAt = null;
+    _state.breakPauseInProgress = true;
+
+    function beginBreakTimer() {
+      _state.breakPauseInProgress = false;
+      if (typeof auraEarRestStart === 'function') {
+        auraEarRestStart(breakMins, false, {
+          lock: false,
+          autoStart: true,
+          source: 'listening',
+          title: title,
+          desc: breakDesc
+        });
+      }
+      updateBreakNudgeUI();
+      renderAll();
+    }
+
+    pauseSpotifyForBreak(function () {
+      beginBreakTimer();
+    });
   }
 
   function setMode(mode, opts) {
     opts = opts || {};
-    if (!opts.auto) return;
+    if (!opts.auto && !opts.manual) return;
     mode = normalizeMode(mode);
     if (!MODES[mode]) return;
-    var breakLocked = isBreakLocked();
-    if (breakLocked && opts.resetSprint) opts = Object.assign({}, opts, { resetSprint: false });
     var store = loadStore();
+    var prevMode = store.active ? normalizeMode(store.active.mode || store.defaultMode) : null;
+    var modeChanged = !!(store.active && prevMode && prevMode !== mode);
+    var wasBreakOrHold = isBreakLocked() || _state.sprintAwaitingContinue ||
+      _state.sprintHoldingForBreak || _state.breakPauseInProgress;
+
+    if (modeChanged && store.active) {
+      opts.resetSprint = true;
+      if (wasBreakOrHold && typeof global.hwCancelEarRestBreak === 'function') {
+        global.hwCancelEarRestBreak();
+      }
+    }
     store.defaultMode = mode;
     if (store.active) {
       store.active.mode = mode;
       store.active.detectedMode = mode;
-      _state.lastSprintNudged = Math.floor((store.active.continuousMin || 0) / getSprintMins(store.active));
-      if (opts.resetSprint && !breakLocked) {
-        _state.continuousStart = Date.now();
+      if (opts.manual) {
+        store.active.modeManual = true;
+        store.active.autoDetected = false;
+        store.active.modeReason = 'You selected ' + getModeConfig(mode).label;
+        store.active.modeConfidence = 100;
+        store.active.matchedTags = [];
+        var pb = typeof global._lpLastPlayback !== 'undefined' ? global._lpLastPlayback : null;
+        if (pb && pb.item && pb.item.id) store.active.manualTrackId = pb.item.id;
+      }
+      _state.lastSprintNudged = Math.floor(sprintElapsedMin(store.active) / getSprintMins(store.active));
+      if (opts.resetSprint) {
+        var now = Date.now();
+        _state.continuousStart = now;
+        _state.lastPlayTickAt = now;
         _state.lastSprintNudged = 0;
+        _state.lastNudgeAt = 0;
+        _state.pauseStartedAt = null;
         store.active.continuousMin = 0;
+        store.active.pomodoroCount = 0;
+        store.active.pendingBreakMins = null;
+        store.active.pendingBreakKind = null;
+        store.active.awaitingBreakContinue = false;
+        _state.frozenContinuousMin = null;
+        _state.frozenListeningMin = null;
+        _state.sprintHoldingForBreak = false;
+        _state.sprintAwaitingContinue = false;
+        _state.breakPauseInProgress = false;
+        dismissBreakNudge();
+        if (typeof global.auraClearSessionBreakTimer === 'function') {
+          global.auraClearSessionBreakTimer();
+        }
+        if (wasBreakOrHold && typeof global.hwResumeSpotify === 'function') {
+          global.hwResumeSpotify({ notify: false });
+        }
+        startUiTick();
       }
     } else {
       _state.lastSprintNudged = 0;
     }
     saveStore(store);
-    if (typeof global.auraSyncSessionBreakTimer === 'function') {
+    if (opts.manual && typeof global.hwSessionClassifierMarkManual === 'function') {
+      global.hwSessionClassifierMarkManual(mode);
+    }
+    if (!store.active && typeof global.auraSyncSessionBreakTimer === 'function') {
       global.auraSyncSessionBreakTimer(mode);
     }
-    notifyModeHighlight(mode, !!opts.resetSprint || breakLocked);
+    if (opts.manual) {
+      if (typeof global.showNotification === 'function') {
+        global.showNotification('Session type: ' + getModeConfig(mode).label);
+      } else if (typeof global.showXpToast === 'function') {
+        global.showXpToast(0, getModeConfig(mode).label + ' session');
+      }
+    }
+    notifyModeHighlight(mode, modeChanged || !!opts.resetSprint, { manual: !!opts.manual });
     renderAll();
-    if (!opts.auto && typeof showXpToast === 'function') {
-      showXpToast(0, getModeConfig(mode).label + ' · ' + getModeConfig(mode).sprintMins + ' min sprints · ' + getBreakMins({ mode: mode }) + ' min rests');
+  }
+
+  function pickMode(mode) {
+    setMode(mode, { manual: true });
+  }
+
+  function clearManualMode() {
+    var store = loadStore();
+    if (store.active) {
+      store.active.modeManual = false;
+      store.active.manualTrackId = null;
+      store.active.modeReason = '';
+      saveStore(store);
+    }
+    if (typeof global.hwSessionClassifierClearManual === 'function') {
+      global.hwSessionClassifierClearManual();
+    }
+    var pb = typeof global._lpLastPlayback !== 'undefined' ? global._lpLastPlayback : null;
+    if (pb && pb.item && typeof global.hwSessionClassifierOnTrack === 'function') {
+      global.hwSessionClassifierOnTrack(pb, store, { force: true });
+    } else {
+      renderAll();
     }
   }
 
   function setDetectedMeta(meta) {
     if (!meta) return;
     var store = loadStore();
+    if (store.active && store.active.modeManual) return;
     if (store.active) {
       var mode = normalizeMode(meta.mode);
       var modeChanged = normalizeMode(store.active.mode || store.defaultMode) !== mode;
@@ -744,7 +1028,7 @@
       var dose = getDosePercent(a);
       var cap = getFocusVolCap();
       var sprint = getSprintMins(a);
-      var cont = a.continuousMin || 0;
+      var cont = sprintElapsedMin(a);
       var toBreak = Math.max(0, sprint - (cont % sprint));
       var vol = a.avgVolumePercent != null ? a.avgVolumePercent : '—';
       var modeCfg = getModeConfig(effectiveSessionMode(a));
@@ -756,16 +1040,26 @@
       } else if (a.mode === 'studyQuick') {
         detectLine = ' · <span style="color:#4338ca;">📚 1-Min Focus & Study sprint active</span>';
       }
+      var timerLine = isSpotifyPaused()
+        ? '<strong>⏸ Sprint timer paused</strong> while Spotify is paused — press play to continue.'
+        : (usesPomodoro(a)
+          ? '<strong>🍅 Pomodoro ' + ((a.pomodoroCount || 0) + 1) + ' · ' + getPomodoroPreset().label +
+            ' — ' + getBreakMins(a) + '-min ' + (nextBreakKind(a) === 'who' ? 'WHO ear rest' : 'break') +
+            ' in ' + formatBreakRemaining(toBreak) + '.</strong>'
+          : '<strong>' + getBreakMins(a) + '-min ear rest in ' + formatBreakRemaining(toBreak) + '.</strong>');
       el.innerHTML = '<strong>Live dose update:</strong> Session #' + a.number + ' · ' + modeCfg.emoji + ' ' + esc(modeCfg.label) +
         ' · ~' + dose + '% daily dose · avg volume ' + vol + '% ' +
         (a.avgVolumePercent > cap ? '(above ' + cap + '% cap)' : '(within cap)') + detectLine + '. ' +
-        '<strong>' + getBreakMins(a) + '-min ear rest in ' + formatBreakRemaining(toBreak) + '.</strong>';
+        timerLine;
       return;
     }
     if (enabled) {
       var modeCfg = getModeConfig(store.defaultMode || 'focus');
-      el.innerHTML = '<strong>Ready to protect your ears.</strong> Press play on Spotify — Aura tracks volume + duration, forecasts your safe dose, and ' +
-        'auto-starts a <strong>' + (modeCfg.sprintMins) + '-min sprint</strong> then a silence break. No calendar needed.';
+      var pomNote = isPomodoroMode(store.defaultMode || 'focus')
+        ? ' Pomodoro <strong>' + getPomodoroPreset().label + '</strong> cycles while you study.'
+        : ' auto-starts a <strong>' + (modeCfg.sprintMins) + '-min sprint</strong> then a silence break.';
+      el.innerHTML = '<strong>Ready to protect your ears.</strong> Press play on Spotify — Aura tracks volume + duration, forecasts your safe dose, and' +
+        pomNote + ' No calendar needed.';
       return;
     }
     el.innerHTML = 'Connect Spotify — Aura tracks your <strong>noise dose</strong> in real time and starts a recovery timer when safe-listening limits are reached. ' +
@@ -791,7 +1085,9 @@
       (a && a.artistName) || '';
     var playing = !!(pb && pb.is_playing && pb.item);
     var reason = a && a.modeReason ? String(a.modeReason).replace(/<[^>]+>/g, '') : '';
-    if (!reason && playing && track) {
+    if (a && a.modeManual) {
+      reason = 'You selected this session type';
+    } else if (!reason && playing && track) {
       reason = 'Detected from ♪ ' + track + (artist ? ' · ' + artist : '');
     }
     var status = playing ? '● LIVE NOW' : (track ? 'PAUSED' : 'READY');
@@ -800,8 +1096,28 @@
       '<div class="ls-active-mode-emoji">' + m.emoji + '</div>' +
       '<div class="ls-active-mode-main">' +
         '<div class="ls-active-mode-title">' + esc(m.label) + '</div>' +
-        '<div class="ls-active-mode-sub">' + m.sprintMins + '-min sprint · ' + (m.breakMins || 10) + '-min ear rest</div>' +
+        '<div class="ls-active-mode-sub">' + (isPomodoroMode(mode)
+          ? '🍅 Pomodoro ' + getPomodoroPreset().label + ' · WHO rest every ' + POMODORO_WHO_EVERY + ' cycles'
+          : m.sprintMins + '-min sprint · ' + (m.breakMins || 10) + '-min ear rest') + '</div>' +
         (reason ? '<div class="ls-active-mode-reason">' + esc(reason) + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
+  function pomodoroPickerHtml() {
+    var id = getPomodoroPresetId();
+    var preset = getPomodoroPreset();
+    return '<div class="ls-pomodoro-picker" id="lsPomodoroPicker">' +
+      '<div class="ls-pomodoro-hd">' +
+        '<span class="ls-pomodoro-title">🍅 Pomodoro timer</span>' +
+        '<span class="ls-pomodoro-sub">' + preset.focusMin + ' min focus · ' + preset.breakMin + ' min break · WHO ear rest every ' + POMODORO_WHO_EVERY + '</span>' +
+      '</div>' +
+      '<div class="ls-pomodoro-presets">' +
+      Object.keys(POMODORO_PRESETS).map(function (key) {
+        var p = POMODORO_PRESETS[key];
+        var on = key === id ? ' ls-pomodoro-on' : '';
+        return '<button type="button" class="ls-pomodoro-btn' + on + '" data-preset="' + key + '" onclick="hwLsSetPomodoroPreset(\'' + key + '\')">' + p.label + '</button>';
+      }).join('') +
       '</div>' +
     '</div>';
   }
@@ -812,10 +1128,12 @@
         var m = getModeConfig(key);
         var active = key === activeMode ? ' ls-mode-legend-active' : '';
         var pulse = key === activeMode && shouldFlashMode(activeMode) ? ' ls-mode-legend-flash' : '';
-        var sprintNote = m.sprintMins + ' min';
+        var sprintNote = isPomodoroMode(key)
+          ? 'Pomodoro ' + getPomodoroPreset().label
+          : (m.sprintMins + ' min sprint · ' + m.breakMins + ' min rest (fixed)');
         return '<div class="ls-mode-legend-row' + active + pulse + '">' +
           '<strong>' + m.emoji + ' ' + m.label + '</strong>' +
-          '<span class="ls-mode-sprint">' + sprintNote + ' sprint · ' + m.breakMins + ' min rest (fixed)</span>' +
+          '<span class="ls-mode-sprint">' + sprintNote + '</span>' +
         '</div>';
       }).join('') +
     '</div>';
@@ -824,8 +1142,14 @@
   function modePickerSectionHtml(store) {
     var mode = effectiveDisplayMode(store);
     var m = getModeConfig(mode);
-    return '<div class="ls-mode-picker-label">Session type · <span class="ls-mode-current">' + m.emoji + ' ' + esc(m.label) + ' active</span></div>' +
-      modeDisplayHtml(mode) +
+    var manual = !!(store.active && store.active.modeManual);
+    var statusLabel = manual ? 'You selected' : (store.active && store.active.autoDetected !== false ? 'Auto-detected' : 'Session type');
+    var resetLink = manual
+      ? ' <button type="button" class="ls-mode-auto-link" onclick="hwLsClearManualMode()">↺ Auto-detect</button>'
+      : '';
+    return '<div class="ls-mode-picker-label">' + statusLabel + ' · <span class="ls-mode-current">' + m.emoji + ' ' + esc(m.label) + '</span>' + resetLink + '</div>' +
+      '<div class="ls-mode-picker-hint">Wrong type? Tap a session below to change it.</div>' +
+      modeDisplayHtml(mode, manual) +
       modeLegendHtml(mode);
   }
 
@@ -843,6 +1167,13 @@
   function sprintProgressHtml(s, isLive) {
     var sprint = getSprintMins(s);
     var modeCfg = getModeConfig(s.mode);
+    if ((_state.sprintHoldingForBreak || _state.breakPauseInProgress) && isLive && !isBreakLocked()) {
+      return '<div class="ls-sprint-wrap ls-sprint-await ls-sprint-active">' +
+        '<div class="ls-sprint-hd"><span>✓ Sprint complete</span><span>Spotify pausing…</span></div>' +
+        '<div class="ls-sprint-countdown">Starting ear rest<small>Timer paused — break begins in a moment</small></div>' +
+        '<div class="ls-sprint-track"><div class="ls-sprint-fill" style="width:100%;background:linear-gradient(90deg,#10b981,#22d3ee)"></div></div>' +
+      '</div>';
+    }
     if (isBreakLocked()) {
       var remain = typeof wpTimerSecs !== 'undefined' ? formatTimerSecs(wpTimerSecs) : '10:00';
       return '<div class="ls-sprint-wrap ls-sprint-break">' +
@@ -859,19 +1190,44 @@
         '<div class="ls-sprint-track"><div class="ls-sprint-fill" style="width:0%"></div></div>' +
       '</div>';
     }
-    var cont = s.continuousMin || s.durationMin || 0;
+    if (isSpotifyPaused()) {
+      var pausedCont = _state.frozenListeningMin != null ? _state.frozenListeningMin : (s.continuousMin || 0);
+      var pausedInSprint = pausedCont % sprint;
+      var pausedPct = Math.min(100, Math.max(0, Math.round((pausedInSprint / sprint) * 100)));
+      var pausedRemaining = Math.max(0, sprint - pausedInSprint);
+      var pausedElapsed = Math.floor(pausedInSprint);
+      var pomPaused = usesPomodoro(s);
+      var pausedHd = pomPaused
+        ? '🍅 Pomodoro ' + ((s.pomodoroCount || 0) + 1) + ' · paused'
+        : modeCfg.emoji + ' ' + esc(modeCfg.label) + ' · paused';
+      return '<div class="ls-sprint-wrap ls-sprint-active ls-sprint-paused">' +
+        '<div class="ls-sprint-hd"><span>' + pausedHd + '</span><span>' + pausedElapsed + ' / ' + sprint + ' min</span></div>' +
+        '<div class="ls-sprint-countdown">Timer paused<small>Press play in Spotify to continue · ' + formatBreakRemaining(pausedRemaining) + ' left in sprint</small></div>' +
+        '<div class="ls-sprint-track"><div class="ls-sprint-fill" style="width:' + pausedPct + '%;opacity:.55"></div></div>' +
+      '</div>';
+    }
+    var cont = sprintElapsedMin(s);
     var inSprint = cont % sprint;
     var pct = Math.min(100, Math.max(0, Math.round((inSprint / sprint) * 100)));
     var remaining = Math.max(0, sprint - inSprint);
     var countdown = formatBreakRemaining(remaining);
     var elapsedInSprint = Math.floor(inSprint);
-    return '<div class="ls-sprint-wrap' + (isLive ? ' ls-sprint-active' : '') + '">' +
+    var pom = usesPomodoro(s);
+    var sprintHd = pom
+      ? '🍅 Pomodoro ' + ((s.pomodoroCount || 0) + 1) + ' · ' + getPomodoroPreset().label
+      : modeCfg.emoji + ' ' + esc(modeCfg.label) + ' sprint';
+    var breakHint = pom
+      ? (nextBreakKind(s) === 'who'
+        ? getResearchBreakMins(s.mode) + '-min WHO ear rest next'
+        : getPomodoroPreset().breakMin + '-min Pomodoro break next')
+      : (getResearchBreakMins(s.mode) + '-min ear rest (WHO/NIOSH)');
+    return '<div class="ls-sprint-wrap' + (isLive ? ' ls-sprint-active' : '') + (pom ? ' ls-sprint-pomodoro' : '') + '">' +
       '<div class="ls-sprint-hd">' +
-        '<span>' + modeCfg.emoji + ' ' + esc(modeCfg.label) + ' sprint</span>' +
+        '<span>' + sprintHd + '</span>' +
         '<span>' + elapsedInSprint + ' / ' + sprint + ' min</span>' +
       '</div>' +
         '<div class="ls-sprint-countdown">' + countdown +
-        '<small>Your sprint length · ' + getResearchBreakMins(s.mode) + '-min ear rest (WHO/NIOSH)</small></div>' +
+        '<small>' + breakHint + '</small></div>' +
       '<div class="ls-sprint-track"><div class="ls-sprint-fill" style="width:' + pct + '%"></div></div>' +
     '</div>';
   }
@@ -881,16 +1237,17 @@
     return sprintProgressHtml({ mode: mode, continuousMin: 0, durationMin: 0 }, false);
   }
 
-  function modeDisplayHtml(activeMode) {
+  function modeDisplayHtml(activeMode, manual) {
     var flash = shouldFlashMode(activeMode);
-    return '<div class="ls-mode-row">' +
+    return '<div class="ls-mode-row ls-mode-row-pick">' +
       Object.keys(MODES).map(function (key) {
         var m = MODES[key];
         var on = key === activeMode ? ' ls-mode-on' : '';
         var pulse = key === activeMode && flash ? ' ls-mode-flash' : '';
-        return '<span class="ls-mode-chip ls-mode-readonly' + on + pulse + '">' +
+        var manualOn = manual && key === activeMode ? ' ls-mode-manual' : '';
+        return '<button type="button" class="ls-mode-chip' + on + pulse + manualOn + '" onclick="hwLsPickMode(\'' + key + '\')" title="Use ' + esc(m.label) + ' timers">' +
           m.emoji + ' ' + m.label +
-        '</span>';
+        '</button>';
       }).join('') +
     '</div>';
   }
@@ -925,7 +1282,9 @@
     var prod = s.productivityScore != null ? s.productivityScore : calcProductivityScore(s);
     var breaks = s.breakCount || 0;
     var modeCfg = getModeConfig(isLive ? effectiveSessionMode(s) : (s.mode || 'active'));
-    var autoTag = s.autoDetected ? ' <span style="font-size:9px;font-weight:800;color:#6366f1;background:#eef2ff;padding:2px 6px;border-radius:6px;vertical-align:middle;">AUTO</span>' : '';
+    var autoTag = s.modeManual
+      ? ' <span style="font-size:9px;font-weight:800;color:#059669;background:rgba(16,185,129,.12);padding:2px 6px;border-radius:6px;vertical-align:middle;">YOU</span>'
+      : (s.autoDetected ? ' <span style="font-size:9px;font-weight:800;color:#6366f1;background:#eef2ff;padding:2px 6px;border-radius:6px;vertical-align:middle;">AUTO</span>' : '');
     var questBadge = typeof global.hwQuestSessionBadgeHtml === 'function' ? global.hwQuestSessionBadgeHtml() : '';
 
     return '<div class="ls-session' + (isLive ? ' ls-session-live' : '') + '">' +
@@ -969,7 +1328,7 @@
 
   function renderModePickers(store) {
     renderActiveModeBanner(store);
-    var html = modePickerSectionHtml(store);
+    var html = pomodoroPickerHtml() + modePickerSectionHtml(store);
     var plannerPicker = document.getElementById('lpListeningSessionsModePicker');
     if (plannerPicker) plannerPicker.innerHTML = html;
   }
@@ -1016,11 +1375,13 @@
         stopUiTick();
         return;
       }
+      var pb = typeof global._lpLastPlayback !== 'undefined' ? global._lpLastPlayback : null;
+      var playing = !!(pb && pb.is_playing && pb.item);
       var vol = null;
-      if (typeof _lpLastPlayback !== 'undefined' && _lpLastPlayback && _lpLastPlayback.device) {
-        vol = _lpLastPlayback.device.volume_percent;
+      if (pb && pb.device) {
+        vol = pb.device.volume_percent;
       }
-      if (vol != null) {
+      if (playing && vol != null) {
         accumulateFocusTime(store.active, vol, Date.now());
       }
       refreshActiveMetrics(store, Date.now());
@@ -1070,6 +1431,7 @@
     _state.lastPlayTickAt = null;
     _state.continuousStart = null;
     _state.frozenContinuousMin = null;
+    _state.sprintHoldingForBreak = false;
     _state.lastSprintNudged = 0;
     var store = loadStore();
     if (store.active) {
@@ -1085,9 +1447,13 @@
   global.hwLsRenderPlanner = renderPlanner;
   global.hwLsAckBreak = ackBreak;
   global.hwLsStartFocusBreak = startFocusBreak;
+  global.hwLsContinueToBreak = startFocusBreak;
+  global.hwLsBreakNudgeAction = breakNudgeAction;
   global.hwLsOnBreakTimerComplete = onBreakTimerComplete;
   global.hwLsUpdateBreakNudge = updateBreakNudgeUI;
   global.hwLsSetMode = setMode;
+  global.hwLsPickMode = pickMode;
+  global.hwLsClearManualMode = clearManualMode;
   global.hwLsSetDetectedMeta = setDetectedMeta;
   global.hwLsDismissBreak = dismissBreakNudge;
   global.hwLsGetTodayStats = getTodayStats;
@@ -1109,6 +1475,13 @@
   };
   global.hwLsGetModeLabel = getModeLabel;
   global.hwLsPauseSafeSessionTracking = pauseSafeSessionTracking;
+  global.hwLsHasActiveSession = function () {
+    return !!loadStore().active;
+  };
+  global.hwLsGetPomodoroPreset = getPomodoroPreset;
+  global.hwLsGetPomodoroPresetId = getPomodoroPresetId;
+  global.hwLsSetPomodoroPreset = setPomodoroPreset;
+  global.hwLsUsesPomodoro = usesPomodoro;
 
   document.addEventListener('DOMContentLoaded', function () {
     setTimeout(renderAll, 800);

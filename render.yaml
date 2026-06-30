@@ -13,8 +13,6 @@ services:
         value: production
       - key: SQLITE_PATH
         value: /var/data/hearwise.db
-      - key: SLACK_SOCKET_MODE
-        value: "true"
       - key: SESSION_SECRET
         generateValue: true
       - key: SPOTIFY_CLIENT_ID

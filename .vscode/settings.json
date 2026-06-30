@@ -13,7 +13,7 @@
   "explorer.fileNesting.expand": false,
   "explorer.fileNesting.patterns": {
     "index.html": "demo-profiles.js, hearing-future.js, coach-engine.js, session-classifier.js, listening-sessions.js, challenges.js, ml-client.js",
-    "server.js": "live-monitoring.js, demo-profiles.js",
+    "server.js": "demo-profiles.js, config.js, featherless.js, system-volume.js",
     "package.json": "package-lock.json, .env.example",
     "README.md": "docs/START_HERE.md, docs/ARCHITECTURE_SUMMARY.md"
   },

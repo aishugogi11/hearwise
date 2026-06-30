@@ -10,16 +10,7 @@ const HearingRiskModel = require('./ml/train');
 const BehavioralAnalyzer = require('./ml/behavioralAnalysis');
 const RiskForecaster = require('./ml/forecasting');
 const { getChallengesForProfile, getChallengeById, getAllAchievements } = require('./challenges');
-const { App } = require('@slack/bolt');
-const { WebClient } = require('@slack/web-api');
-const LiveMonitoringService = require('./live-monitoring');
 const systemVolume = require('./system-volume');
-const {
-  featherlessSlackOverview,
-  featherlessSlackRisk,
-  featherlessSlackSummary,
-} = require('./featherless');
-
 dotenv.config();
 config.validateEnv();
 
@@ -382,7 +373,6 @@ app.get('/health', (req, res) => {
     env: config.NODE_ENV,
     db: pool.type || 'unknown',
     spotify: !!(process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET),
-    slack: !!process.env.SLACK_BOT_TOKEN,
     systemVolume: systemVolume.isSupported()
   });
 });
@@ -391,6 +381,7 @@ app.get('/api/config', (req, res) => {
   res.json({
     production: config.isProduction,
     demoTools: config.demoToolsEnabled,
+    betaMode: true,
     appUrl: config.getAppUrl(),
     systemVolume: systemVolume.isSupported()
   });
@@ -650,986 +641,6 @@ const behavioralAnalyzer = new BehavioralAnalyzer();
 // Initialize Risk Forecaster
 const riskForecaster = new RiskForecaster();
 
-// Initialize Slack — Web API for meeting detection (Socket Mode optional)
-let slackApp = null;
-let slackClient = null;
-let liveMonitoring = null;
-const userSlackMap = new Map();
-const _slackMeetingSim = new Map();
-let _slackBotUserId = null;
-
-async function initSlackBotInfo() {
-  if (!slackClient) return;
-  try {
-    const auth = await slackClient.auth.test();
-    _slackBotUserId = auth.user_id;
-    console.log('🤖 Slack bot user ID:', _slackBotUserId, '(do not use as your personal ID in HearWise)');
-  } catch (e) {
-    console.log('Slack auth.test failed:', e.message);
-  }
-}
-
-if (process.env.SLACK_BOT_TOKEN) {
-  try {
-    slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
-    console.log('✅ Slack Web API client ready (meeting detection)');
-  } catch (error) {
-    console.log('Slack Web API disabled:', error.message);
-    slackClient = null;
-  }
-}
-
-const slackSocketModeEnabled =
-  process.env.SLACK_SOCKET_MODE !== 'false' &&
-  process.env.SLACK_BOT_TOKEN &&
-  process.env.SLACK_APP_LEVEL_TOKEN;
-
-if (slackSocketModeEnabled) {
-  try {
-    slackApp = new App({
-      token: process.env.SLACK_BOT_TOKEN,
-      appToken: process.env.SLACK_APP_LEVEL_TOKEN,
-      socketMode: true,
-      logLevel: 'warn',
-    });
-    if (!slackClient) slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
-    liveMonitoring = new LiveMonitoringService(slackClient, slackApp);
-    liveMonitoring.setupSlackEventHandlers();
-    console.log('✅ Slack Socket Mode + live event monitoring enabled');
-  } catch (error) {
-    console.log('Slack Socket Mode disabled:', error.message);
-    slackApp = null;
-  }
-} else if (process.env.SLACK_BOT_TOKEN && process.env.SLACK_APP_LEVEL_TOKEN) {
-  console.log('ℹ️ Slack Socket Mode off (set SLACK_SOCKET_MODE=true to enable)');
-}
-
-if (!liveMonitoring) {
-  liveMonitoring = new LiveMonitoringService(slackClient, null);
-  console.log('✅ Live monitoring service initialized' + (slackClient ? ' (API polling)' : ''));
-}
-
-if (slackApp && liveMonitoring) {
-  liveMonitoring.startMonitoring();
-}
-
-initSlackBotInfo();
-
-// ==================== SLACK INTEGRATION ====================
-
-if (slackApp) {
-  // Slash Command: /hearwise - Main HearWise command
-  slackApp.command('/hearwise', async ({ command, ack, respond, client, body }) => {
-    await ack();
-    
-    const userId = body.user_id;
-    const userName = body.user_name;
-    
-    // Store user mapping
-  userSlackMap.set(userId, { userName, timestamp: Date.now() });
-  
-  try {
-    // Get user's hearing health overview
-    const overview = await getHearingHealthOverview(userId);
-    const auraNote = await featherlessSlackOverview(userName, userId, overview);
-    const topLine = auraNote || overview.topRecommendation;
-    
-    await respond({
-      text: `🎧 *HearWise Health Overview for ${userName}*`,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `🎧 *HearWise Health Overview for ${userName}*`
-          }
-        },
-        {
-          type: 'divider'
-        },
-        {
-          type: 'section',
-          fields: [
-            {
-              type: 'mrkdwn',
-              text: `*Risk Score:*\n${overview.riskScore}/100`
-            },
-            {
-              type: 'mrkdwn',
-              text: `*Risk Level:*\n${overview.riskLevel}`
-            },
-            {
-              type: 'mrkdwn',
-              text: `*Hearing Age:*\n${overview.hearingAge} years`
-            },
-            {
-              type: 'mrkdwn',
-              text: `*Weekly Exposure:*\n${overview.weeklyExposure} hours`
-            }
-          ]
-        },
-        {
-          type: 'divider'
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `*Aura:*\n${topLine}`
-          }
-        },
-        {
-          type: 'actions',
-          elements: [
-            {
-              type: 'button',
-              text: {
-                type: 'plain_text',
-                text: 'View Risk Details'
-              },
-              value: 'risk_details',
-              action_id: 'view_risk_details'
-            },
-            {
-              type: 'button',
-              text: {
-                type: 'plain_text',
-                text: 'Get Summary'
-              },
-              value: 'get_summary',
-              action_id: 'get_summary'
-            }
-          ]
-        }
-      ]
-    });
-  } catch (error) {
-    console.error('Error handling /hearwise command:', error);
-    await respond({
-      text: 'Sorry, I encountered an error fetching your hearing health data. Please try again.',
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '❌ Sorry, I encountered an error fetching your hearing health data. Please try again.'
-          }
-        }
-      ]
-    });
-  }
-});
-
-// Slash Command: /hearwise risk - Get current risk assessment
-slackApp.command('/hearwise risk', async ({ command, ack, respond, client, body }) => {
-  await ack();
-  
-  const userId = body.user_id;
-  const userName = body.user_name;
-  
-  try {
-    const riskAnalysis = await getDetailedRiskAnalysis(userId);
-    const auraNote = await featherlessSlackRisk(userName, userId, riskAnalysis);
-    
-    await respond({
-      text: `📊 *Hearing Risk Assessment for ${userName}*`,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `📊 *Hearing Risk Assessment for ${userName}*`
-          }
-        },
-        {
-          type: 'divider'
-        },
-        {
-          type: 'section',
-          fields: [
-            {
-              type: 'mrkdwn',
-              text: `*Overall Risk:*\n${riskAnalysis.overallRisk}/100`
-            },
-            {
-              type: 'mrkdwn',
-              text: `*Risk Category:*\n${riskAnalysis.riskCategory}`
-            },
-            {
-              type: 'mrkdwn',
-              text: `*Confidence:*\n${riskAnalysis.confidence}%`
-            },
-            {
-              type: 'mrkdwn',
-              text: `*Trend:*\n${riskAnalysis.trend}`
-            }
-          ]
-        },
-        {
-          type: 'divider'
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `*Risk Contributors:*\n${riskAnalysis.contributors.map(c => `• ${c.feature}: ${c.impact}`).join('\n')}`
-          }
-        },
-        {
-          type: 'divider'
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: auraNote
-              ? `*Aura:*\n${auraNote}`
-              : `*Recommendations:*\n${riskAnalysis.recommendations.map(r => `• ${r}`).join('\n')}`
-          }
-        }
-      ]
-    });
-  } catch (error) {
-    console.error('Error handling /hearwise risk command:', error);
-    await respond({
-      text: 'Sorry, I encountered an error fetching your risk assessment. Please try again.'
-    });
-  }
-});
-
-// Slash Command: /hearwise summary - Get daily/weekly summary
-slackApp.command('/hearwise summary', async ({ command, ack, respond, client, body }) => {
-  await ack();
-  
-  const userId = body.user_id;
-  const userName = body.user_name;
-  const period = command.text || 'week'; // Default to weekly
-  
-  try {
-    const summary = await getListeningSummary(userId, period);
-    const auraNote = await featherlessSlackSummary(userName, userId, period, summary);
-    const insightLine = auraNote || summary.insights;
-    
-    await respond({
-      text: `📈 *${period === 'day' ? 'Daily' : 'Weekly'} Listening Summary for ${userName}*`,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `📈 *${period === 'day' ? 'Daily' : 'Weekly'} Listening Summary for ${userName}*`
-          }
-        },
-        {
-          type: 'divider'
-        },
-        {
-          type: 'section',
-          fields: [
-            {
-              type: 'mrkdwn',
-              text: `*Total Listening:*\n${summary.totalHours} hours`
-            },
-            {
-              type: 'mrkdwn',
-              text: `*Average Volume:*\n${summary.avgVolume}%`
-            },
-            {
-              type: 'mrkdwn',
-              text: `*Sessions:*\n${summary.sessionCount}`
-            },
-            {
-              type: 'mrkdwn',
-              text: `*Breaks Taken:*\n${summary.breakCount}`
-            }
-          ]
-        },
-        {
-          type: 'divider'
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: auraNote ? `*Aura:*\n${insightLine}` : `*Insights:*\n${insightLine}`
-          }
-        }
-      ]
-    });
-  } catch (error) {
-    console.error('Error handling /hearwise summary command:', error);
-    await respond({
-      text: 'Sorry, I encountered an error fetching your listening summary. Please try again.'
-    });
-  }
-});
-
-// Handle button clicks from interactive messages
-slackApp.action({ action_id: 'view_risk_details' }, async ({ body, ack, respond, client }) => {
-  await ack();
-  
-  const userId = body.user.id;
-  const riskAnalysis = await getDetailedRiskAnalysis(userId);
-  
-  await respond({
-    text: `📊 *Detailed Risk Analysis*`,
-    blocks: [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `📊 *Detailed Risk Analysis*`
-        }
-      },
-      {
-        type: 'divider'
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Risk Score Breakdown:*\n${riskAnalysis.featureBreakdown}`
-        }
-      }
-    ],
-    replace_original: false
-  });
-});
-
-slackApp.action({ action_id: 'get_summary' }, async ({ body, ack, respond, client }) => {
-  await ack();
-  
-  const userId = body.user.id;
-  const summary = await getListeningSummary(userId, 'week');
-  
-  await respond({
-    text: `📈 *Weekly Summary*`,
-    blocks: [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `📈 *Weekly Summary*`
-        }
-      },
-      {
-        type: 'divider'
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Total Listening:*\n${summary.totalHours} hours\n\n*Average Volume:*\n${summary.avgVolume}%\n\n*Insights:*\n${summary.insights}`
-        }
-      }
-    ],
-    replace_original: false
-  });
-});
-
-// Handle app mentions
-slackApp.event('app_mention', async ({ event, say }) => {
-  await say({
-    text: `Hi! I'm HearWise, your hearing health assistant. You can use these commands:\n• \`/hearwise\` - Get your health overview\n• \`/hearwise risk\` - Get risk assessment\n• \`/hearwise summary\` - Get listening summary`,
-    blocks: [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `Hi! I'm HearWise, your hearing health assistant. You can use these commands:\n• \`/hearwise\` - Get your health overview\n• \`/hearwise risk\` - Get risk assessment\n• \`/hearwise summary\` - Get listening summary`
-        }
-      }
-    ]
-  });
-});
-
-// Handle direct messages
-slackApp.message(async ({ message, say }) => {
-  if (message.channel_type === 'im') {
-    await say({
-      text: `Hello! I'm HearWise. Use \`/hearwise\` to get started with your hearing health overview.`,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `Hello! I'm HearWise. Use \`/hearwise\` to get started with your hearing health overview.`
-          }
-        }
-      ]
-    });
-  }
-});
-} // Close the if (slackApp) block
-
-// ==================== SLACK HELPER FUNCTIONS ====================
-
-async function getHearingHealthOverview(userId) {
-  // Mock data for now - will be replaced with actual database queries
-  return {
-    riskScore: 45,
-    riskLevel: 'Moderate',
-    hearingAge: 28,
-    weeklyExposure: 18.5,
-    topRecommendation: 'Reduce weekend volume by 10% to lower weekly exposure'
-  };
-}
-
-async function getDetailedRiskAnalysis(userId) {
-  // Mock data for now
-  return {
-    overallRisk: 45,
-    riskCategory: 'Moderate',
-    confidence: 87,
-    trend: 'Stable',
-    contributors: [
-      { feature: 'Listening Duration', impact: '+15 points' },
-      { feature: 'Volume Exposure', impact: '+20 points' },
-      { feature: 'Session Frequency', impact: '+10 points' }
-    ],
-    recommendations: [
-      'Reduce listening volume by 10-15%',
-      'Take 5-minute breaks every hour',
-      'Limit daily listening to under 4 hours'
-    ],
-    featureBreakdown: '• Listening Duration: 35% weight\n• Volume Exposure: 30% weight\n• Session Frequency: 15% weight\n• Consecutive Time: 10% weight\n• Age: 5% weight\n• Recovery Habits: 5%'
-  };
-}
-
-async function getListeningSummary(userId, period) {
-  // Mock data for now
-  return {
-    totalHours: period === 'day' ? 2.5 : 18.5,
-    avgVolume: 72,
-    sessionCount: period === 'day' ? 4 : 28,
-    breakCount: period === 'day' ? 2 : 14,
-    insights: period === 'day' 
-      ? 'Your listening patterns are within safe limits today. Continue taking regular breaks.'
-      : 'Weekly exposure is slightly elevated. Consider reducing weekend volume by 10%.'
-  };
-}
-
-// ==================== SLACK API ENDPOINTS ====================
-
-// Send DM to user
-app.post('/api/slack/dm', async (req, res) => {
-  try {
-    const { userId, message } = req.body;
-
-    if (!userId || !message) {
-      return res.status(400).json({ error: 'userId and message are required' });
-    }
-
-    if (!slackClient) {
-      return res.json({
-        success: true,
-        demo: true,
-        message: 'Demo mode — message shown in app only'
-      });
-    }
-
-    // Open DM channel
-    const dmResult = await slackClient.conversations.open({
-      users: userId
-    });
-    
-    const channelId = dmResult.channel.id;
-    
-    // Send message
-    await slackClient.chat.postMessage({
-      channel: channelId,
-      text: message,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: message
-          }
-        }
-      ]
-    });
-    
-    res.json({ success: true, channelId });
-  } catch (error) {
-    console.error('Error sending DM:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Send hearing health alert
-app.post('/api/slack/alert', async (req, res) => {
-  try {
-    const { userId, alertType, severity, message } = req.body;
-    
-    if (!userId || !message) {
-      return res.status(400).json({ error: 'userId and message are required' });
-    }
-    
-    const dmResult = await slackClient.conversations.open({ users: userId });
-    const channelId = dmResult.channel.id;
-    
-    const emoji = severity === 'high' ? '🚨' : severity === 'medium' ? '⚠️' : 'ℹ️';
-    
-    await slackClient.chat.postMessage({
-      channel: channelId,
-      text: `${emoji} ${alertType}`,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `${emoji} *${alertType}*\n${message}`
-          }
-        }
-      ]
-    });
-    
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error sending alert:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Send meeting notification
-app.post('/api/slack/meeting-notification', async (req, res) => {
-  try {
-    const { userId, meetingTitle, duration, headphoneUsage } = req.body;
-    
-    const dmResult = await slackClient.conversations.open({ users: userId });
-    const channelId = dmResult.channel.id;
-    
-    await slackClient.chat.postMessage({
-      channel: channelId,
-      text: `🎧 Meeting Alert: ${meetingTitle}`,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `🎧 *Meeting Alert: ${meetingTitle}*\n\n*Duration:* ${duration}\n*Headphone Usage:* ${headphoneUsage}\n\n💡 Tip: Take a 5-minute break after this meeting to let your ears recover.`
-          }
-        }
-      ]
-    });
-    
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error sending meeting notification:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Send daily summary
-app.post('/api/slack/daily-summary', async (req, res) => {
-  try {
-    const { userId } = req.body;
-    
-    const summary = await getListeningSummary(userId, 'day');
-    
-    const dmResult = await slackClient.conversations.open({ users: userId });
-    const channelId = dmResult.channel.id;
-    
-    await slackClient.chat.postMessage({
-      channel: channelId,
-      text: `📊 Daily Hearing Health Summary`,
-      blocks: [
-        {
-          type: 'header',
-          text: {
-            type: 'plain_text',
-            text: '📊 Daily Hearing Health Summary'
-          }
-        },
-        {
-          type: 'divider'
-        },
-        {
-          type: 'section',
-          fields: [
-            {
-              type: 'mrkdwn',
-              text: `*Total Listening:*\n${summary.totalHours} hours`
-            },
-            {
-              type: 'mrkdwn',
-              text: `*Average Volume:*\n${summary.avgVolume}%`
-            },
-            {
-              type: 'mrkdwn',
-              text: `*Sessions:*\n${summary.sessionCount}`
-            },
-            {
-              type: 'mrkdwn',
-              text: `*Breaks Taken:*\n${summary.breakCount}`
-            }
-          ]
-        },
-        {
-          type: 'divider'
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `*Insights:*\n${summary.insights}`
-          }
-        }
-      ]
-    });
-    
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error sending daily summary:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Test endpoint to verify Slack connectivity
-app.get('/api/slack/test', async (req, res) => {
-  try {
-    // Test Slack connection
-    const authResult = await slackClient.auth.test();
-    
-    res.json({
-      success: true,
-      message: 'Slack connection successful',
-      botInfo: {
-        botUserId: authResult.bot_id,
-        botName: authResult.user,
-        team: authResult.team
-      }
-    });
-  } catch (error) {
-    console.error('Slack connection test failed:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Test endpoint to send a test message
-app.post('/api/slack/test-message', async (req, res) => {
-  try {
-    const { userId } = req.body;
-    
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
-    
-    const dmResult = await slackClient.conversations.open({ users: userId });
-    const channelId = dmResult.channel.id;
-    
-    await slackClient.chat.postMessage({
-      channel: channelId,
-      text: '✅ HearWise Slack integration is working! This is a test message.',
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '✅ *HearWise Slack integration is working!*\n\nThis is a test message to verify connectivity. You can now use:\n• `/hearwise` - Get your health overview\n• `/hearwise risk` - Get risk assessment\n• `/hearwise summary` - Get listening summary'
-          }
-        }
-      ]
-    });
-    
-    res.json({ success: true, message: 'Test message sent successfully' });
-  } catch (error) {
-    console.error('Error sending test message:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Link user to Slack ID
-app.post('/api/slack/link-user', async (req, res) => {
-  try {
-    const { userId, slackUserId } = req.body;
-    
-    if (!userId || !slackUserId) {
-      return res.status(400).json({ error: 'userId and slackUserId are required' });
-    }
-    
-    userSlackMap.set(userId, { slackUserId, timestamp: Date.now() });
-    
-    // Store in database if needed
-    await pool.query(
-      `INSERT INTO user_slack_mapping (user_id, slack_user_id) 
-       VALUES ($1, $2) 
-       ON CONFLICT (user_id) DO UPDATE SET 
-         slack_user_id = EXCLUDED.slack_user_id,
-         updated_at = CURRENT_TIMESTAMP`,
-      [userId, slackUserId]
-    );
-    
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error linking user to Slack:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ==================== LIVE MONITORING API ENDPOINTS ====================
-
-// Start live monitoring
-app.post('/api/live-monitoring/start', async (req, res) => {
-  try {
-    const { slackUserId, surveyData, decibel } = req.body;
-    
-    if (slackUserId) {
-      liveMonitoring.setSlackUserId(slackUserId);
-    }
-    
-    if (surveyData) {
-      liveMonitoring.setSurveyData(surveyData);
-    }
-    
-    if (decibel) {
-      liveMonitoring.setCurrentDecibel(decibel);
-    }
-    
-    liveMonitoring.startMonitoring();
-    
-    res.json({ success: true, message: 'Live monitoring started' });
-  } catch (error) {
-    console.error('Error starting live monitoring:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Stop live monitoring
-app.post('/api/live-monitoring/stop', async (req, res) => {
-  try {
-    liveMonitoring.stopMonitoring();
-    
-    res.json({ success: true, message: 'Live monitoring stopped' });
-  } catch (error) {
-    console.error('Error stopping live monitoring:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get timeline events
-app.get('/api/live-monitoring/timeline', (req, res) => {
-  try {
-    const timeline = liveMonitoring.getTimeline();
-    
-    res.json({ success: true, timeline });
-  } catch (error) {
-    console.error('Error getting timeline:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Slack setup diagnostics for the settings UI
-app.get('/api/slack/setup-info', async (req, res) => {
-  try {
-    let scopeCheck = { ok: false, error: null, needed: null };
-    let humanMembers = [];
-
-    if (slackClient) {
-      try {
-        await slackClient.users.info({ user: _slackBotUserId || 'U00000000' });
-        scopeCheck.ok = true;
-      } catch (e) {
-        scopeCheck.error = e.data && e.data.error ? e.data.error : e.message;
-        scopeCheck.needed = e.data && e.data.needed;
-        scopeCheck.provided = e.data && e.data.response_metadata && e.data.response_metadata.scopes;
-      }
-
-      if (scopeCheck.ok) {
-        try {
-          const list = await slackClient.users.list({ limit: 200 });
-          humanMembers = (list.members || [])
-            .filter(function (m) { return m && !m.is_bot && !m.deleted && m.id !== 'USLACKBOT' && m.id !== _slackBotUserId; })
-            .map(function (m) {
-              return {
-                id: m.id,
-                name: m.real_name || m.name || m.id,
-                inHuddle: (m.profile && m.profile.huddle_state) === 'in_a_huddle'
-              };
-            });
-        } catch (e) { /* ignore */ }
-      }
-    }
-
-    const inHuddleNow = humanMembers.find(function (m) { return m.inHuddle; });
-
-    res.json({
-      configured: !!slackClient,
-      socketMode: !!slackApp,
-      botUserId: _slackBotUserId,
-      humanMembers: humanMembers,
-      suggestedUserId: inHuddleNow ? inHuddleNow.id : (humanMembers.length === 1 ? humanMembers[0].id : null),
-      requiredBotScopes: ['users:read', 'users.profile:read'],
-      requiredBotEvents: ['user_huddle_changed'],
-      scopeCheck,
-      hint: 'Use YOUR member ID from Slack → Profile → ⋮ → Copy member ID. Do not use the bot ID.'
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Set Slack user ID for live monitoring
-app.post('/api/live-monitoring/set-slack-user', (req, res) => {
-  try {
-    const { slackUserId, surveyData, decibel } = req.body;
-
-    if (!slackUserId) {
-      return res.status(400).json({ error: 'slackUserId is required' });
-    }
-
-    if (_slackBotUserId && slackUserId === _slackBotUserId) {
-      return res.status(400).json({
-        error: 'That ID belongs to the HearWise bot, not you. In Slack: Profile → ⋮ → Copy member ID.',
-        isBotId: true,
-        botUserId: _slackBotUserId
-      });
-    }
-
-    liveMonitoring.setSlackUserId(slackUserId);
-    userSlackMap.set(slackUserId, { timestamp: Date.now() });
-
-    if (surveyData) liveMonitoring.setSurveyData(surveyData);
-    if (decibel) liveMonitoring.setCurrentDecibel(decibel);
-
-    liveMonitoring.startMonitoring();
-
-    res.json({
-      success: true,
-      message: 'Slack user ID saved',
-      meetingPolling: !!slackClient
-    });
-  } catch (error) {
-    console.error('Error setting Slack user ID:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Poll whether a Slack user is currently in a huddle/call (uses users.info huddle_state)
-app.get('/api/slack/meeting-status', async (req, res) => {
-  try {
-    const slackUserId = req.query.slackUserId;
-    if (!slackUserId) {
-      return res.status(400).json({ error: 'slackUserId query param is required' });
-    }
-
-    if (_slackMeetingSim.has(slackUserId)) {
-      return res.json({
-        inMeeting: true,
-        source: 'demo_simulate',
-        title: 'Slack Meeting',
-        configured: true
-      });
-    }
-
-    if (_slackBotUserId && slackUserId === _slackBotUserId) {
-      return res.json({
-        inMeeting: false,
-        configured: !!slackClient,
-        isBotId: true,
-        error: 'You saved the bot ID. Use your personal Slack member ID instead.',
-        botUserId: _slackBotUserId
-      });
-    }
-
-    if (liveMonitoring.isUserInHuddle(slackUserId)) {
-      return res.json({
-        inMeeting: true,
-        source: 'realtime_event',
-        title: 'Slack Huddle',
-        configured: !!slackClient
-      });
-    }
-
-    if (liveMonitoring.isUserInActiveMeeting()) {
-      return res.json({
-        inMeeting: true,
-        source: 'live_events',
-        configured: !!slackClient
-      });
-    }
-
-    if (!slackClient) {
-      return res.json({
-        inMeeting: false,
-        configured: false,
-        note: 'Add SLACK_BOT_TOKEN to .env for real-time Slack meeting detection'
-      });
-    }
-
-    const state = await liveMonitoring.fetchUserHuddleState(slackUserId);
-    const payload = Object.assign({ configured: true }, state);
-    if (state.error && String(state.error).includes('missing_scope')) {
-      payload.setupHint = 'Add bot scopes users:read and users.profile:read, subscribe to user_huddle_changed, then Reinstall to Workspace.';
-      payload.requiredScopes = ['users:read', 'users.profile:read'];
-    }
-    res.json(payload);
-  } catch (error) {
-    console.error('Error checking Slack meeting status:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Demo: simulate Slack meeting join for testing auto Join Meeting
-app.post('/api/slack/meeting-simulate', config.requireDevRoute, (req, res) => {
-  try {
-    const { slackUserId, inMeeting } = req.body;
-    if (!slackUserId) {
-      return res.status(400).json({ error: 'slackUserId is required' });
-    }
-    if (inMeeting) {
-      _slackMeetingSim.set(slackUserId, Date.now());
-    } else {
-      _slackMeetingSim.delete(slackUserId);
-    }
-    res.json({ success: true, inMeeting: !!inMeeting });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Test Slack notification
-app.post('/api/live-monitoring/test-notification', config.requireDevRoute, async (req, res) => {
-  try {
-    const { slackUserId } = req.body;
-
-    if (slackUserId) {
-      liveMonitoring.setSlackUserId(slackUserId);
-    }
-
-    if (!slackClient) {
-      return res.json({
-        success: true,
-        demo: true,
-        message: 'Demo mode — in-app notifications only. Add SLACK_BOT_TOKEN to .env for real Slack DMs.'
-      });
-    }
-
-    const result = await liveMonitoring.sendTestNotification();
-
-    if (result.success) {
-      return res.json(result);
-    }
-
-    res.json({
-      success: true,
-      demo: true,
-      message: result.error || 'Slack DM unavailable — demo toast shown in app instead'
-    });
-  } catch (error) {
-    console.error('Error sending test notification:', error);
-    res.json({
-      success: true,
-      demo: true,
-      message: 'Demo mode — Slack bot not configured'
-    });
-  }
-});
-
 // Enhanced Spotify OAuth with listening history scopes
 app.get('/api/auth/status', async (req, res) => {
   await restoreSpotifySession(req);
@@ -1841,8 +852,56 @@ app.post('/api/spotify/skip', async (req, res) => {
 
 app.put('/api/spotify/pause', async (req, res) => {
   try {
-    await spotifyApiCall(req, 'https://api.spotify.com/v1/me/player/pause', { method: 'PUT' });
-    res.json({ success: true });
+    await restoreSpotifySession(req);
+    if (!req.session.access_token) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    let deviceId = (req.body && req.body.device_id) || null;
+    let deviceName = null;
+
+    try {
+      const playback = await fetchSpotifyPlaybackState(req, { forceFresh: true });
+      if (!deviceId && playback.device && playback.device.id) {
+        deviceId = playback.device.id;
+        deviceName = playback.device.name;
+      }
+    } catch (e) { /* ignore — fall back to devices list */ }
+
+    if (!deviceId) {
+      const devices = await fetchSpotifyDevices(req);
+      const picked = pickSpotifyDevice(devices);
+      if (picked && picked.id) {
+        deviceId = picked.id;
+        deviceName = picked.name;
+      }
+    }
+
+    async function callPauseApi(id) {
+      let url = 'https://api.spotify.com/v1/me/player/pause';
+      if (id) url += '?device_id=' + encodeURIComponent(id);
+      return spotifyApiCall(req, url, { method: 'PUT' });
+    }
+
+    let resp = await callPauseApi(deviceId);
+    if (resp.status !== 204 && !resp.ok && deviceId) {
+      console.warn('[Spotify pause] retry without device_id after', resp.status);
+      resp = await callPauseApi(null);
+    }
+
+    if (resp.status === 204 || resp.ok) {
+      console.log('[Spotify pause] Paused', deviceName ? 'on ' + deviceName : '');
+      return res.json({
+        success: true,
+        device_id: deviceId || undefined,
+        device_name: deviceName || undefined
+      });
+    }
+
+    let errText = '';
+    try { errText = await resp.text(); } catch (e) { /* ignore */ }
+    console.warn('[Spotify pause] failed', resp.status, errText);
+    return res.status(resp.status || 500).json({ success: false, error: 'Pause failed', status: resp.status });
   } catch (err) {
     if (err.message === 'Not authenticated' || err.message === 'Token refresh failed') {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -1853,8 +912,51 @@ app.put('/api/spotify/pause', async (req, res) => {
 
 app.put('/api/spotify/play', async (req, res) => {
   try {
-    await spotifyApiCall(req, 'https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
-    res.json({ success: true });
+    await restoreSpotifySession(req);
+    if (!req.session.access_token) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    let deviceId = (req.body && req.body.device_id) || null;
+    let deviceName = null;
+
+    try {
+      const playback = await fetchSpotifyPlaybackState(req, { forceFresh: true });
+      if (!deviceId && playback.device && playback.device.id) {
+        deviceId = playback.device.id;
+        deviceName = playback.device.name;
+      }
+    } catch (e) { /* ignore */ }
+
+    if (!deviceId) {
+      const devices = await fetchSpotifyDevices(req);
+      const picked = pickSpotifyDevice(devices);
+      if (picked && picked.id) {
+        deviceId = picked.id;
+        deviceName = picked.name;
+      }
+    }
+
+    async function callPlayApi(id) {
+      let url = 'https://api.spotify.com/v1/me/player/play';
+      if (id) url += '?device_id=' + encodeURIComponent(id);
+      return spotifyApiCall(req, url, { method: 'PUT' });
+    }
+
+    let resp = await callPlayApi(deviceId);
+    if (resp.status !== 204 && !resp.ok && deviceId) {
+      resp = await callPlayApi(null);
+    }
+
+    if (resp.status === 204 || resp.ok) {
+      return res.json({
+        success: true,
+        device_id: deviceId || undefined,
+        device_name: deviceName || undefined
+      });
+    }
+
+    return res.status(resp.status || 500).json({ success: false, error: 'Play failed', status: resp.status });
   } catch (err) {
     if (err.message === 'Not authenticated' || err.message === 'Token refresh failed') {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -3512,30 +2614,7 @@ server.on('error', (err) => {
   throw err;
 });
 
-// Start Slack Bolt App (only if configured)
-if (slackApp) {
-  slackApp.error((error) => {
-    console.log('⚠️ Slack app error (non-fatal):', error.message);
-  });
-
-  (async () => {
-    try {
-      await slackApp.start();
-      console.log('⚡️ Slack Bolt app started');
-    } catch (error) {
-      console.log('⚠️ Slack Bolt app failed to start:', error.message);
-      console.log('🎧 Web server continues running without Slack integration');
-      slackApp = null;
-    }
-  })();
-}
-
 process.on('uncaughtException', (err) => {
-  const msg = err && err.message ? err.message : '';
-  if (/socket|SocketMode|Unhandled event/i.test(msg)) {
-    console.warn('⚠️ Slack connection issue — HearWise web app still running at ' + publicUrl);
-    return;
-  }
   console.error(err);
   process.exit(1);
 });

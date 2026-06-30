@@ -718,6 +718,9 @@
   /* ── Tools (internal actions) ── */
   var Tools = {
     pauseSpotify: function () {
+      if (typeof global.hwPauseSpotify === 'function') {
+        return global.hwPauseSpotify({ notify: false });
+      }
       return fetch('/api/spotify/pause', { method: 'PUT', credentials: 'include' })
         .then(function (r) { return r.ok; }).catch(function () { return false; });
     },
@@ -1207,6 +1210,10 @@
   /* ── Orchestrator public API (internal + thin UI hooks) ── */
   var Orchestrator = {
     init: function () {
+      try {
+        var saved = localStorage.getItem('hearwise_pomodoro_preset');
+        if (saved && PRESETS[saved]) FocusModule.state.presetId = saved;
+      } catch (e) { /* ignore */ }
       var preset = FocusModule.preset();
       FocusModule.state.secsLeft = preset.focusMin * 60;
       FocusModule.state.secsTotal = preset.focusMin * 60;
@@ -1214,10 +1221,15 @@
       manageAutoPilotLoop();
     },
 
-    selectPreset: function (id) {
+    selectPreset: function (id, opts) {
+      opts = opts || {};
       if (FocusModule.state.phase !== 'idle') return;
       if (!PRESETS[id]) return;
       FocusModule.state.presetId = id;
+      try { localStorage.setItem('hearwise_pomodoro_preset', id); } catch (e) { /* ignore */ }
+      if (!opts.skipLs && typeof global.hwLsSetPomodoroPreset === 'function') {
+        global.hwLsSetPomodoroPreset(id, { skipOrch: true });
+      }
       var preset = FocusModule.preset();
       FocusModule.state.secsLeft = preset.focusMin * 60;
       FocusModule.state.secsTotal = preset.focusMin * 60;
@@ -1427,7 +1439,7 @@
   };
 
   global.hwOrchestrator = Orchestrator;
-  global.hwOrcSelectPreset = function (id) { Orchestrator.selectPreset(id); };
+  global.hwOrcSelectPreset = function (id, opts) { Orchestrator.selectPreset(id, opts); };
   global.hwOrcSessionToggle = function () { Orchestrator.toggleSession(); };
   global.hwOrcSessionCancel = function () { Orchestrator.cancelSession(); };
   global.hwOrcToggleAutoPilot = function () {

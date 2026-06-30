@@ -138,6 +138,7 @@
   var _contextCache = {};
   var _lastTrackId = null;
   var _inFlight = null;
+  var _manualModeLock = null;
 
   global.SESSION_MUSIC_SURVEY = [
     { mode: 'focus', label: 'Focus & Study', emoji: '🎯', tags: ['lofi', 'classical', 'ambient', 'instrumental', 'podcast'] },
@@ -1052,6 +1053,7 @@
     opts = opts || {};
     if (!result || !result.mode) return false;
     if (typeof global.hwLsSetMode !== 'function') return false;
+    if (store && store.active && store.active.modeManual && !opts.manual) return false;
 
     var current = getCurrentMode(store);
     var modeChanged = result.mode !== current;
@@ -1059,7 +1061,7 @@
 
     if (!modeChanged && !opts.force && !isTaylorSprint) return false;
 
-    var resetSprint = modeChanged || isTaylorSprint || !!opts.isNewSession || !!opts.isNewTrack;
+    var resetSprint = modeChanged || isTaylorSprint || !!opts.isNewSession;
     global.hwLsSetMode(result.mode, { auto: true, resetSprint: resetSprint });
 
     if (typeof global.hwLsSetDetectedMeta === 'function') {
@@ -1190,7 +1192,12 @@
   global.hwIsWysTrack = isWysTrack;
   global.hwIsSnowmanByWysTrack = isSnowmanByWysTrack;
   global.hwIsPopTrack = isPopTrack;
-  global.hwSessionClassifierMarkManual = function () {};
+  global.hwSessionClassifierMarkManual = function (mode) {
+    _manualModeLock = normalizeMode(mode || 'active');
+  };
+  global.hwSessionClassifierClearManual = function () {
+    _manualModeLock = null;
+  };
   global.SESSION_STYLE_TAGS = STYLE_TAGS;
 
 })(typeof window !== 'undefined' ? window : global);
