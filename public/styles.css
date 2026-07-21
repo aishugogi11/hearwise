@@ -211,11 +211,13 @@ h1 {
 
 .hero-launch:hover { transform: translateY(-1px); }
 
-.app-grid {
+.activity-section {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(330px, 0.85fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
   align-items: start;
+  max-width: 920px;
+  margin: 0 auto 32px;
 }
 
 .timer-card,
@@ -725,8 +727,7 @@ dialog p:not(.eyebrow) {
 
 @media (max-width: 850px) {
   .hero { margin-top: 38px; }
-  .app-grid { grid-template-columns: 1fr; }
-  .timer-card { min-height: auto; }
+  .activity-section { grid-template-columns: 1fr; }
   .steps { grid-template-columns: 1fr; }
   .steps article { padding: 22px 10px; }
   .wellness-note { grid-template-columns: 1fr; }
@@ -740,7 +741,6 @@ dialog p:not(.eyebrow) {
   .hero { margin: 40px auto 34px; }
   h1 { font-size: 45px; }
   .hero-copy { font-size: 15px; }
-  .timer-card { padding: 25px 16px; border-radius: 23px; }
   .today-card, .history-card { padding: 22px 18px; border-radius: 21px; }
   .stats-grid { gap: 6px; }
   .stat { padding: 12px 5px; }

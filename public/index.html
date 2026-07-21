@@ -44,102 +44,51 @@
       <p class="eyebrow">Your listening plan</p>
       <h2>A simple routine for long listening days</h2>
       <div class="steps">
-        <article><span>1</span><h3>Choose a block</h3><p>Pick a listening duration, tap Ready to start, then begin when your music is playing.</p></article>
+        <article><span>1</span><h3>Choose a block</h3><p>Open the app, pick a listening duration, and tap Ready to start when your music is playing.</p></article>
         <article><span>2</span><h3>Play anywhere</h3><p>Use Spotify or any music app while HearWise keeps time.</p></article>
         <article><span>3</span><h3>Take a pause</h3><p>When time is up, start a short break before the next block.</p></article>
       </div>
     </section>
 
-    <section class="app-grid" aria-label="Listening timer">
-      <article class="timer-card">
-        <div class="card-heading">
-          <div class="card-heading-icon" aria-hidden="true">▶</div>
-          <div><p class="eyebrow">Recovery tracker</p><h2>Start a listening block</h2></div>
-          <span class="live-pill">Ready</span>
-        </div>
-        <div class="mode-switch" role="group" aria-label="Timer mode">
-          <button class="mode-button active" type="button" data-mode="listen">Listening</button>
-          <button class="mode-button" type="button" data-mode="break">Break</button>
-        </div>
-
-        <div class="timer-status" id="timerStatus" aria-live="polite">Pick a duration, then tap Ready to start</div>
-
-        <div class="timer-shell">
-          <svg class="progress-ring" viewBox="0 0 240 240" aria-hidden="true">
-            <circle class="ring-track" cx="120" cy="120" r="106"></circle>
-            <circle class="ring-progress" id="ringProgress" cx="120" cy="120" r="106"></circle>
-          </svg>
-          <div class="timer-time" id="timerTime" role="timer" aria-label="25 minutes remaining">25:00</div>
-        </div>
-
-        <div class="preset-row" id="listenPresets" aria-label="Listening duration">
-          <button class="preset active" type="button" data-minutes="25">25 min</button>
-          <button class="preset" type="button" data-minutes="45">45 min</button>
-          <button class="preset" type="button" data-minutes="60">60 min</button>
-        </div>
-        <div class="preset-row hidden" id="breakPresets" aria-label="Break duration">
-          <button class="preset active" type="button" data-minutes="5">5 min</button>
-          <button class="preset" type="button" data-minutes="10">10 min</button>
-          <button class="preset" type="button" data-minutes="15">15 min</button>
-        </div>
-
-        <div class="timer-controls">
-          <button class="primary-button" id="startPauseButton" type="button">Ready to start</button>
-          <button class="icon-button" id="resetButton" type="button" aria-label="Reset timer" title="Reset timer">↻</button>
-        </div>
-
-        <label class="volume-field">
-          <span>My volume setting</span>
-          <select id="volumeSetting">
-            <option value="not-set">Not tracking</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </select>
-        </label>
-        <p class="volume-note">This is your own label, not a measured decibel level.</p>
-      </article>
-
-      <aside class="side-panel">
-        <section class="today-card">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Your activity</p>
-              <h2>Today</h2>
-            </div>
-            <span class="today-date" id="todayDate"></span>
+    <section class="activity-section" aria-label="Your activity">
+      <section class="today-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Your activity</p>
+            <h2>Today</h2>
           </div>
-          <div class="stats-grid">
-            <div class="stat">
-              <strong id="todayMinutes">0</strong>
-              <span>minutes listened</span>
-            </div>
-            <div class="stat">
-              <strong id="todaySessions">0</strong>
-              <span>sessions finished</span>
-            </div>
-            <div class="stat">
-              <strong id="todayBreaks">0</strong>
-              <span>breaks finished</span>
-            </div>
+          <span class="today-date" id="todayDate"></span>
+        </div>
+        <div class="stats-grid">
+          <div class="stat">
+            <strong id="todayMinutes">0</strong>
+            <span>minutes listened</span>
           </div>
-        </section>
+          <div class="stat">
+            <strong id="todaySessions">0</strong>
+            <span>sessions finished</span>
+          </div>
+          <div class="stat">
+            <strong id="todayBreaks">0</strong>
+            <span>breaks finished</span>
+          </div>
+        </div>
+      </section>
 
-        <section class="history-card">
-          <div class="section-heading history-heading">
-            <div>
-              <p class="eyebrow">Saved on this device</p>
-              <h2>Recent sessions</h2>
-            </div>
-            <button class="text-button danger" id="clearHistoryButton" type="button">Clear</button>
+      <section class="history-card">
+        <div class="section-heading history-heading">
+          <div>
+            <p class="eyebrow">Saved on this device</p>
+            <h2>Recent sessions</h2>
           </div>
-          <div class="empty-state" id="emptyState">
-            <span aria-hidden="true">♪</span>
-            <p>Your completed sessions will appear here.</p>
-          </div>
-          <ol class="history-list" id="historyList"></ol>
-        </section>
-      </aside>
+          <button class="text-button danger" id="clearHistoryButton" type="button">Clear</button>
+        </div>
+        <div class="empty-state" id="emptyState">
+          <span aria-hidden="true">♪</span>
+          <p>Your completed sessions will appear here.</p>
+        </div>
+        <ol class="history-list" id="historyList"></ol>
+      </section>
     </section>
 
     <section class="wellness-note">
@@ -158,8 +107,8 @@
       <button class="dialog-close" aria-label="Close privacy information">×</button>
       <p class="eyebrow">Privacy</p>
       <h2>Your sessions stay with you</h2>
-      <p>This version of HearWise does not require an account and does not send your listening history to a server. Timer state, completed sessions, and your volume preference are stored in this browser using local storage.</p>
-      <p>Use <strong>Clear</strong> in Recent sessions to delete completed activity. Resetting the active timer removes its current state.</p>
+      <p>This version of HearWise does not require an account and does not send your listening history to a server. Completed sessions are stored in this browser using local storage.</p>
+      <p>Use <strong>Clear</strong> in Recent sessions to delete completed activity.</p>
       <button class="primary-button dialog-done" value="close">Done</button>
     </form>
   </dialog>
