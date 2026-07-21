@@ -13,16 +13,6 @@
   var UI_TICK_MS = 1000;
 
   var MODES = {
-    quick: {
-      label: '1-Min Sprint', defaultSprintMins: 1, configurable: false, emoji: '⚡',
-      bestFor: 'Quick listening check',
-      tip: '1-min sprint → locked ear rest. Great for a fast session reset.'
-    },
-    studyQuick: {
-      label: '1-Min Focus & Study', defaultSprintMins: 1, configurable: false, emoji: '📚',
-      bestFor: 'Quick study & focus check',
-      tip: '1-min study sprint → locked ear rest. Ideal before a deep focus block.'
-    },
     focus: {
       label: 'Focus & Study', defaultSprintMins: 25, configurable: true, emoji: '🎯',
       bestFor: 'Study, work & deep focus',
@@ -79,16 +69,12 @@
 
   /** Ear-rest durations — fixed from hearing-health research; not user-adjustable. */
   var RESEARCH_BREAK_MINS = {
-    quick: 5,
-    studyQuick: 5,
     focus: 10,
     active: 10,
     sleep: 5
   };
 
   var RESEARCH_BREAK_LABELS = {
-    quick: 'WHO Make Listening Safe — brief pause after quick checks',
-    studyQuick: 'WHO Make Listening Safe — brief pause after quick checks',
     focus: 'WHO/ITU — 10-min silence gap after sustained listening',
     active: 'NIOSH — ear rest every ~60 min at moderate levels',
     sleep: 'Lower stimulation — short quiet recovery between wind-down blocks'
@@ -97,9 +83,7 @@
   var SPRINT_LIMITS = {
     focus: { min: 15, max: 120 },
     active: { min: 10, max: 90 },
-    sleep: { min: 15, max: 60 },
-    quick: { min: 1, max: 1 },
-    studyQuick: { min: 1, max: 1 }
+    sleep: { min: 15, max: 60 }
   };
 
   /** Pomodoro presets — shared with focus orchestrator (25/5 default for study sessions). */
@@ -125,8 +109,7 @@
     breakPauseInProgress: false,
     sprintAwaitingContinue: false,
     frozenListeningMin: null,
-    sprintHoldingForBreak: false,
-    manualArmed: false
+    sprintHoldingForBreak: false
   };
 
   function isSprintTimerHeld() {
@@ -144,14 +127,8 @@
     saveStore(store);
   }
 
-  function isManualOnlySession(session) {
-    return !!(session && session.manualOnly);
-  }
-
   function isSpotifyPaused() {
     if (isBreakLocked() || _state.sprintAwaitingContinue || _state.breakPauseInProgress) return false;
-    var store = loadStore();
-    if (store.active && isManualOnlySession(store.active)) return false;
     if (_state.pauseStartedAt == null) return false;
     var pb = typeof global._lpLastPlayback !== 'undefined' ? global._lpLastPlayback : null;
     if (pb && pb.is_playing && pb.item) return false;
@@ -249,8 +226,8 @@
   }
 
   function normalizeMode(mode) {
-    if (mode === 'study') return 'focus';
-    if (mode === 'chill' || mode === 'workout') return 'active';
+    if (mode === 'study' || mode === 'studyQuick') return 'focus';
+    if (mode === 'chill' || mode === 'workout' || mode === 'quick') return 'active';
     return mode;
   }
 
@@ -576,7 +553,6 @@
     _state.frozenListeningMin = null;
     _state.pauseStartedAt = null;
     _state.sprintHoldingForBreak = false;
-    _state.manualArmed = false;
     return store;
   }
 
@@ -638,38 +614,10 @@
     return store;
   }
 
-  function startManualSession() {
-    if (isBreakLocked()) return;
-    var store = loadStore();
-    if (store.active) return;
-    var now = Date.now();
-    var mode = effectiveDisplayMode(store);
-    store = startSession(store, null, now);
-    store.active.mode = mode;
-    store.active.detectedMode = mode;
-    store.active.manualOnly = true;
-    store.active.modeManual = true;
-    store.active.autoDetected = false;
-    store.active.modeReason = 'Manual timer — ' + getModeConfig(mode).label;
-    _state.manualArmed = false;
-    saveStore(store);
-    startUiTick();
-    if (typeof global.showXpToast === 'function') {
-      global.showXpToast(5, 'Listening sprint started');
+  function openManualTimer() {
+    if (typeof global.hwOpenManualTimer === 'function') {
+      global.hwOpenManualTimer();
     }
-    renderAll();
-  }
-
-  function manualStartClick() {
-    if (isBreakLocked()) return;
-    var store = loadStore();
-    if (store.active) return;
-    if (!_state.manualArmed) {
-      _state.manualArmed = true;
-      renderAll();
-      return;
-    }
-    startManualSession();
   }
 
   function updateActiveFromPlayback(store, pb, now) {
@@ -737,11 +685,6 @@
       startUiTick();
     } else {
       _state.lastPlayTickAt = null;
-      if (store.active && isManualOnlySession(store.active)) {
-        saveStore(store);
-        renderAll();
-        return;
-      }
       if (store.active && !_state.pauseStartedAt && !isBreakLocked() && !_state.breakPauseInProgress) {
         snapshotListeningPause(store, now);
         _state.pauseStartedAt = now;
@@ -1135,10 +1078,10 @@
       var detectLine = a.modeReason
         ? ' · <span style="color:#4338ca;">Aura detected ' + esc(modeCfg.label) + ' from your music</span>'
         : '';
-      if (a.mode === 'quick' || (a.artistName && /taylor swift/i.test(a.artistName))) {
-        detectLine = ' · <span style="color:#4338ca;">⚡ Taylor Swift → 1-min sprint active</span>';
-      } else if (a.mode === 'studyQuick') {
-        detectLine = ' · <span style="color:#4338ca;">📚 1-Min Focus & Study sprint active</span>';
+      if (a.mode === 'active' && (a.popTrack || (a.artistName && /taylor swift/i.test(a.artistName)))) {
+        detectLine = ' · <span style="color:#4338ca;">🎵 Pop listening detected</span>';
+      } else if (a.mode === 'focus' && (a.lofiFocus || a.focusInstrumental)) {
+        detectLine = ' · <span style="color:#4338ca;">🎯 Focus & Study detected</span>';
       }
       var timerLine = isSpotifyPaused()
         ? '<strong>⏸ Sprint timer paused</strong> while Spotify is paused — press play to continue.'
@@ -1283,18 +1226,12 @@
       '</div>';
     }
     if (!isLive) {
-      var armed = _state.manualArmed;
-      var btnLabel = armed ? 'Start listening' : 'Ready to start';
-      var hint = armed
-        ? 'Start your music or podcast, then tap Start listening'
-        : 'Pick a session type above, then tap Ready to start';
-      return '<div class="ls-sprint-wrap ls-sprint-idle' + (armed ? ' ls-sprint-await' : '') + '">' +
+      return '<div class="ls-sprint-wrap ls-sprint-idle">' +
         '<div class="ls-sprint-hd"><span>' + modeCfg.emoji + ' ' + esc(modeCfg.label) + '</span>' +
         '<span>' + sprint + ' min sprints</span></div>' +
-        '<div class="ls-sprint-countdown">' + (armed ? 'Ready to go' : 'Ready to start') +
-        '<small>' + hint + '</small></div>' +
+        '<div class="ls-sprint-countdown">Manual listening timer<small>Use any music app — pick a block length and take breaks when time is up</small></div>' +
         '<div class="ls-sprint-track"><div class="ls-sprint-fill" style="width:0%"></div></div>' +
-        '<button type="button" class="ls-sprint-continue-btn" onclick="hwLsManualStartClick()">' + btnLabel + '</button>' +
+        '<button type="button" class="ls-sprint-continue-btn" onclick="hwLsOpenManualTimer()">Ready to start</button>' +
       '</div>';
     }
     if (isSpotifyPaused()) {
@@ -1462,9 +1399,9 @@
     } else {
       html += sprintPreviewHtml(store.defaultMode || effectiveDisplayMode(store));
       if (isTrackingEnabled()) {
-        html += '<div class="ls-idle" style="margin-top:8px;">Spotify connected — press play to auto-detect session type, or use Ready to start above for a manual timer.</div>';
+        html += '<div class="ls-idle" style="margin-top:8px;">Spotify connected — press play for auto-detected sprints, or tap Ready to start for the manual timer.</div>';
       } else {
-        html += '<div class="ls-idle" style="margin-top:8px;">No Spotify needed — tap Ready to start for a manual listening sprint with mandatory ear rests.</div>';
+        html += '<div class="ls-idle" style="margin-top:8px;">Tap Ready to start to open the listening timer — no Spotify required.</div>';
       }
     }
     list.innerHTML = html;
@@ -1550,8 +1487,7 @@
     renderAll();
   }
 
-  global.hwLsManualStartClick = manualStartClick;
-  global.hwLsStartManualSession = startManualSession;
+  global.hwLsOpenManualTimer = openManualTimer;
   global.hwLsOnPlayback = onPlayback;
   global.hwLsRenderAll = renderAll;
   global.hwLsRenderHome = renderHome;

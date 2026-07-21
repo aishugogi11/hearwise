@@ -31,6 +31,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Menlo&family=Consolas&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 <link rel="stylesheet" href="feedback-widget.css"/>
+<link rel="stylesheet" href="manual-timer.css"/>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
 <style>
@@ -22516,6 +22517,40 @@ document.addEventListener('hearwise:appReady', () => {
 </script>
 <script src="hearwise-beta.js"></script>
 <script src="feedback-widget.js"></script>
+<script src="manual-timer.js"></script>
+
+  <div class="hw-manual-timer-overlay" id="hwManualTimerOverlay" aria-hidden="true">
+    <div class="hw-manual-timer-card" id="hwManualTimerCard" role="dialog" aria-modal="true" aria-labelledby="hwManualTimerTitle">
+      <div class="hw-manual-timer-hd">
+        <div>
+          <div class="hw-manual-timer-title" id="hwManualTimerTitle">Listening timer</div>
+          <div class="hw-manual-timer-sub">Works with Spotify or any music app — take breaks when time is up.</div>
+        </div>
+        <button type="button" class="hw-manual-timer-close" id="hwManualTimerCloseBtn" aria-label="Close timer">×</button>
+      </div>
+      <div class="hw-manual-timer-modes" role="group" aria-label="Timer mode">
+        <button type="button" class="hw-manual-timer-mode active" data-mode="listen" aria-pressed="true">Listening</button>
+        <button type="button" class="hw-manual-timer-mode" data-mode="break" aria-pressed="false">Break</button>
+      </div>
+      <div class="hw-manual-timer-status" id="hwManualTimerStatus">Pick a duration, then tap Ready to start</div>
+      <div class="hw-manual-timer-display" id="hwManualTimerDisplay" role="timer">25:00</div>
+      <div class="hw-manual-timer-presets" id="hwManualListenPresets" aria-label="Listening duration">
+        <button type="button" class="hw-manual-timer-preset active" data-minutes="25">25 min</button>
+        <button type="button" class="hw-manual-timer-preset" data-minutes="45">45 min</button>
+        <button type="button" class="hw-manual-timer-preset" data-minutes="60">60 min</button>
+      </div>
+      <div class="hw-manual-timer-presets" id="hwManualBreakPresets" aria-label="Break duration" hidden>
+        <button type="button" class="hw-manual-timer-preset active" data-minutes="5">5 min</button>
+        <button type="button" class="hw-manual-timer-preset" data-minutes="10">10 min</button>
+        <button type="button" class="hw-manual-timer-preset" data-minutes="15">15 min</button>
+      </div>
+      <div class="hw-manual-timer-actions">
+        <button type="button" class="hw-manual-timer-start" id="hwManualTimerStartBtn">Ready to start</button>
+        <button type="button" class="hw-manual-timer-reset" id="hwManualTimerResetBtn" aria-label="Reset timer" title="Reset timer">↻</button>
+      </div>
+      <p class="hw-manual-timer-note">Private to this device — timer state is saved in your browser.</p>
+    </div>
+  </div>
 
 </body>
 </html>

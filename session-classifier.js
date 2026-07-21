@@ -59,8 +59,6 @@
   ];
 
   var MODE_STYLE_MAP = {
-    quick: ['pop', 'rnb', 'indie', 'jazz'],
-    studyQuick: ['lofi', 'classical', 'ambient', 'instrumental', 'podcast'],
     focus: ['lofi', 'classical', 'ambient', 'instrumental', 'podcast'],
     active: ['pop', 'rnb', 'edm', 'hiphop', 'rock', 'indie', 'jazz'],
     sleep: ['whitenoise', 'piano', 'audiobook', 'ambient']
@@ -102,9 +100,9 @@
     active: [
       'Blinding Lights — The Weeknd',
       'As It Was — Harry Styles',
-      'Espresso — Sabrina Carpenter'
-    ],
-    quick: ['Any Taylor Swift track']
+      'Espresso — Sabrina Carpenter',
+      'Any Taylor Swift track'
+    ]
   };
 
   var POP_ARTIST_PATTERNS = [
@@ -134,8 +132,8 @@
     /tony romera/, /dryhope/, /morning routine/, /cozy coffee/, /steezy prime/
   ];
 
-  var MODE_LABELS = { focus: 'Focus & Study', active: 'Chill & Workout', sleep: 'Sleep', quick: '1-Min Sprint', studyQuick: '1-Min Focus & Study' };
-  var MODES = ['quick', 'studyQuick', 'focus', 'active', 'sleep'];
+  var MODE_LABELS = { focus: 'Focus & Study', active: 'Chill & Workout', sleep: 'Sleep' };
+  var MODES = ['focus', 'active', 'sleep'];
 
   function getCustomSessionModes() {
     try {
@@ -150,7 +148,7 @@
 
   function refreshClassifierModes() {
     MODES.length = 0;
-    ['quick', 'studyQuick', 'focus', 'active', 'sleep'].forEach(function (m) { MODES.push(m); });
+    ['focus', 'active', 'sleep'].forEach(function (m) { MODES.push(m); });
     getCustomSessionModes().forEach(function (c) {
       if (MODES.indexOf(c.id) < 0) MODES.push(c.id);
       MODE_LABELS[c.id] = c.label;
@@ -186,8 +184,6 @@
   var _manualModeLock = null;
 
   var SESSION_MUSIC_SURVEY = [
-    { mode: 'quick', label: '1-Min Sprint', emoji: '⚡', tags: ['pop', 'rnb', 'indie'] },
-    { mode: 'studyQuick', label: '1-Min Focus & Study', emoji: '📚', tags: ['lofi', 'classical', 'ambient', 'instrumental'] },
     { mode: 'focus', label: 'Focus & Study', emoji: '🎯', tags: ['lofi', 'classical', 'ambient', 'instrumental', 'podcast'] },
     { mode: 'active', label: 'Chill & Workout', emoji: '🎵', tags: ['pop', 'rnb', 'indie', 'jazz', 'edm', 'hiphop', 'rock'] },
     { mode: 'sleep', label: 'Sleep', emoji: '🌙', tags: ['whitenoise', 'piano', 'ambient', 'audiobook'] }
@@ -195,8 +191,8 @@
   global.SESSION_MUSIC_SURVEY = SESSION_MUSIC_SURVEY;
 
   function normalizeMode(mode) {
-    if (mode === 'study') return 'focus';
-    if (mode === 'chill' || mode === 'workout') return 'active';
+    if (mode === 'study' || mode === 'studyQuick') return 'focus';
+    if (mode === 'chill' || mode === 'workout' || mode === 'quick') return 'active';
     return mode;
   }
 
@@ -975,14 +971,15 @@
 
     if (isTaylorSwiftTrack(track)) {
       return {
-        mode: 'quick',
+        mode: 'active',
         confidence: 0.99,
-        reason: 'Taylor Swift · 1-min safe-listening sprint, then a 5-min ear rest · "' + trackName + '"',
-        scores: { quick: 0.99 },
+        reason: 'Taylor Swift → Chill & Workout · "' + trackName + '"',
+        scores: { active: 0.99, focus: 0.08 },
         styleScores: { pop: 0.85, _contextSource: '' },
         matchedTags: ['pop'],
         contextSource: '',
-        taylorSwiftSprint: true
+        popTrack: true,
+        activeListening: true
       };
     }
 
@@ -1014,15 +1011,18 @@
 
     if (isLofiTrack(track, genres, meta, features, styleScores)) {
       if (isStudyFocusTrack(track, meta)) {
+        var lofiLabel = focusStudyProducerLabel(track, meta);
+        var lofiReason = lofiLabel !== 'Lofi' ? (lofiLabel + ' → Focus & Study') : 'Lofi study → Focus & Study';
         return {
-          mode: 'studyQuick',
+          mode: 'focus',
           confidence: 0.92,
-          reason: 'Lofi study · 1-min Focus & Study sprint, then 5-min ear rest · "' + trackName + '"',
-          scores: { studyQuick: 0.92, focus: 0.75 },
+          reason: lofiReason + ' · "' + trackName + '"',
+          scores: { focus: 0.92, active: 0.1 },
           styleScores: styleScores,
           matchedTags: ['lofi'],
           contextSource: contextSource,
-          studyQuickSprint: true
+          focusInstrumental: true,
+          lofiFocus: true
         };
       }
       var lofiLabel = focusStudyProducerLabel(track, meta);
@@ -1105,11 +1105,10 @@
 
     var current = getCurrentMode(store);
     var modeChanged = result.mode !== current;
-    var isTaylorSprint = !!result.taylorSwiftSprint;
 
-    if (!modeChanged && !opts.force && !isTaylorSprint) return false;
+    if (!modeChanged && !opts.force) return false;
 
-    var resetSprint = modeChanged || isTaylorSprint || !!opts.isNewSession;
+    var resetSprint = modeChanged || !!opts.isNewSession;
     global.hwLsSetMode(result.mode, { auto: true, resetSprint: resetSprint });
 
     if (typeof global.hwLsSetDetectedMeta === 'function') {
@@ -1122,15 +1121,10 @@
       });
     }
 
-    var shouldNotify = modeChanged || (isTaylorSprint && (opts.isNewSession || opts.isNewTrack || opts.force)) ||
-      ((result.lofiFocus || result.popTrack) && !!opts.isNewTrack);
+    var shouldNotify = modeChanged || ((result.lofiFocus || result.popTrack) && !!opts.isNewTrack);
 
     if (typeof global.showXpToast === 'function' && shouldNotify) {
-      if (result.mode === 'quick' || isTaylorSprint) {
-        global.showXpToast(0, '⚡ Taylor Swift → 1-min safe-listening sprint');
-      } else if (result.mode === 'studyQuick' || result.studyQuickSprint) {
-        global.showXpToast(0, '📚 1-Min Focus & Study sprint');
-      } else if (result.lofiFocus || result.focusInstrumental) {
+      if (result.lofiFocus || result.focusInstrumental) {
         var focusLabel = '🎯 Lofi → Focus & Study session';
         if (result.reason) {
           if (result.reason.indexOf('Lofi Girl') >= 0 || result.lofiGirlFocus) focusLabel = '🎯 Lofi Girl → Focus & Study session';
@@ -1145,19 +1139,10 @@
       }
     }
 
-    if ((result.mode === 'quick' || isTaylorSprint) && shouldNotify && typeof global.auraCoachSay === 'function') {
+    if ((result.lofiFocus || result.focusInstrumental) && modeChanged && typeof global.auraCoachSay === 'function') {
       global.auraCoachSay(
-        'Taylor Swift detected — starting a <strong>1-minute safe-listening sprint</strong>. ' +
-        'When the minute is up, I\'ll start a <strong>5-minute ear rest</strong>. Keep volume in the green.',
-        [{ label: 'Got it', _back: false }]
-      );
-      if (typeof global.auraTogglePanel === 'function') global.auraTogglePanel(true);
-    }
-
-    if ((result.mode === 'studyQuick' || result.studyQuickSprint) && modeChanged && typeof global.auraCoachSay === 'function') {
-      global.auraCoachSay(
-        'Study / focus music detected — starting a <strong>1-minute Focus & Study sprint</strong>. ' +
-        'When the minute is up, I\'ll start a <strong>5-minute ear rest</strong>. Keep volume under 60%.',
+        'Focus music detected — I\'ll track this as a <strong>Focus & Study</strong> session. ' +
+        'Take ear rests when your sprint timer ends and keep volume under 60%.',
         [{ label: 'Got it', _back: false }]
       );
       if (typeof global.auraTogglePanel === 'function') global.auraTogglePanel(true);
@@ -1217,15 +1202,8 @@
     if (!trackId) return;
 
     var isNewTrack = trackId !== _lastTrackId;
-    var isTS = isTaylorSwiftTrack(pb.item);
 
-    if (!opts.force && !isNewTrack) {
-      if (isTS && getCurrentMode(store) !== 'quick') {
-        opts.force = true;
-      } else {
-        return;
-      }
-    }
+    if (!opts.force && !isNewTrack) return;
 
     _lastTrackId = trackId;
     runClassification(pb, store, Object.assign({}, opts, { isNewTrack: isNewTrack }));
