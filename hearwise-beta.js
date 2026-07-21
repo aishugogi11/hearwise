@@ -60,7 +60,7 @@
   function applyBetaOnboardingCopy() {
     var sub = document.getElementById('spotifyConnectSubtext');
     if (sub) {
-      sub.textContent = 'Connect Spotify to unlock today\'s quest, safe listening sprints, and your Sound Sanctuary companion.';
+      sub.textContent = 'Connect Spotify to unlock today\'s quest and safe listening sprints.';
     }
     var steps = document.querySelectorAll('#spotifyConnectView .hw-beta-step-text');
     var copy = [
@@ -75,7 +75,7 @@
     if (title) title.textContent = 'Your daily study companion';
     var headerSub = document.getElementById('dashboardHeaderSub');
     if (headerSub) {
-      headerSub.textContent = 'Finish today\'s quest to upgrade your companion and protect your ears while you listen.';
+      headerSub.textContent = 'Finish today\'s quest to protect your ears while you listen.';
     }
   }
 
@@ -93,15 +93,8 @@
       bar.classList.add('visible');
     }
 
-    var quest = document.getElementById('challengeHero');
-    var companionMount = document.getElementById('hwBetaCompanionMount');
-    if (quest && companionMount && quest.nextSibling !== companionMount) {
-      quest.parentNode.insertBefore(companionMount, quest.nextSibling);
-    }
     var auraCard = document.getElementById('hwBetaAuraCard');
-    if (companionMount && auraCard && companionMount.nextSibling !== auraCard) {
-      companionMount.parentNode.insertBefore(auraCard, companionMount.nextSibling);
-    }
+    if (auraCard) auraCard.style.display = 'none';
 
     var fab = document.getElementById('auraCoachFab');
     if (fab) fab.style.display = 'none';
@@ -109,9 +102,6 @@
     applyBetaOnboardingCopy();
     simplifyQuestCopy();
     updateBetaAuraCard();
-    if (typeof global.hwCompanionProgression !== 'undefined' && global.hwCompanionProgression.renderUI) {
-      global.hwCompanionProgression.renderUI();
-    }
   }
 
   function simplifyQuestCopy() {
@@ -196,7 +186,7 @@
     if (pct >= 100) {
       el.textContent = 'Quest complete! Your streak is locked for today. See you tomorrow.';
     } else if (pts.sprints >= 1 && pts.rests < 1) {
-      el.textContent = 'Sprint done — take your ear rest to finish today\'s quest and upgrade your companion.';
+      el.textContent = 'Sprint done — take your ear rest to finish today\'s quest.';
     } else if (pts.sprints < 1) {
       el.textContent = 'Press play on Spotify, open Recovery Tracker, and complete one safe sprint to start.';
     } else {

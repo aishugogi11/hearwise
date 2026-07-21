@@ -323,8 +323,7 @@
   }
 
   function notify(msg, label) {
-    if (typeof global.showNotification === 'function') global.showNotification(msg);
-    else if (typeof global.showXpToast === 'function') global.showXpToast(0, label || msg);
+    /* Companion upgrade toasts disabled — progress lives on Progress tab only */
   }
 
   function recordWellnessDay(state) {
@@ -692,11 +691,7 @@
     var mount = document.getElementById('hwCompanionMount');
     if (mount) mount.innerHTML = companionCardHtml(state);
     var questStrip = document.getElementById('hwCompanionQuestStrip');
-    if (questStrip) {
-      var p = getPayload();
-      questStrip.innerHTML = p.emoji + ' <strong>' + p.name + '</strong> · Tier ' + (p.tier || 1) + ' · ' + p.xpPct + '% to next upgrade';
-      questStrip.style.display = 'block';
-    }
+    if (questStrip) questStrip.style.display = 'none';
   }
 
   function renderSanctuaryModal(state) {
@@ -710,22 +705,12 @@
 
   function ensureSanctuaryMount() {
     if (!document.getElementById('hwCompanionMount')) {
-      var betaWrap = document.getElementById('hwBetaCompanionMount');
-      if (betaWrap) {
-        var betaMount = document.createElement('div');
-        betaMount.id = 'hwCompanionMount';
-        betaMount.className = 'hw-companion-mount';
-        betaWrap.appendChild(betaMount);
-      } else {
-        var mission = document.getElementById('wpMissionCard');
-        if (mission) {
-          var mount = document.createElement('div');
-          mount.id = 'hwCompanionMount';
-          mount.className = 'hw-companion-mount';
-          var phase = document.getElementById('wpMissionPhase');
-          if (phase && phase.parentNode) phase.parentNode.insertBefore(mount, phase.nextSibling);
-          else mission.insertBefore(mount, mission.children[1] || null);
-        }
+      var progressWrap = document.getElementById('hwAvatarStudioWrap');
+      if (progressWrap && progressWrap.parentNode) {
+        var mount = document.createElement('div');
+        mount.id = 'hwCompanionMount';
+        mount.className = 'hw-companion-mount';
+        progressWrap.parentNode.insertBefore(mount, progressWrap);
       }
     }
     if (!document.getElementById('hwCompanionQuestStrip')) {

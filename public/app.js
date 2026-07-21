@@ -17,6 +17,7 @@
     timerTime: document.getElementById('timerTime'),
     ringProgress: document.getElementById('ringProgress'),
     startPauseButton: document.getElementById('startPauseButton'),
+    livePill: document.querySelector('.live-pill'),
     resetButton: document.getElementById('resetButton'),
     volumeSetting: document.getElementById('volumeSetting'),
     todayDate: document.getElementById('todayDate'),
@@ -61,7 +62,7 @@
   function loadTimer() {
     const saved = safeParse(STORAGE.timer, null);
     if (!saved || !['listen', 'break'].includes(saved.mode)) return defaultTimer();
-    if (!['idle', 'running', 'paused'].includes(saved.status)) return defaultTimer(saved.mode);
+    if (!['idle', 'armed', 'running', 'paused'].includes(saved.status)) return defaultTimer(saved.mode);
 
     const durationSec = Math.max(60, Number(saved.durationSec) || 1500);
     const restored = {
@@ -160,9 +161,16 @@
       return;
     }
 
+    if (timer.status === 'idle') {
+      timer.status = 'armed';
+      saveTimer();
+      render();
+      return;
+    }
+
     if (timer.remainingSec <= 0) {
       timer.remainingSec = timer.durationSec;
-      timer.status = 'idle';
+      timer.status = 'armed';
     }
 
     if (!timer.startedAt) timer.startedAt = Date.now();
@@ -174,7 +182,9 @@
   }
 
   function resetTimer() {
-    if (timer.status !== 'idle' || timer.remainingSec !== timer.durationSec) {
+    const needsConfirm = timer.status === 'running' || timer.status === 'paused' ||
+      (timer.status === 'idle' && timer.remainingSec !== timer.durationSec);
+    if (needsConfirm) {
       const confirmed = window.confirm('Reset this timer? The unfinished block will not be saved.');
       if (!confirmed) return;
     }
@@ -276,9 +286,27 @@
     } else if (timer.status === 'paused') {
       els.timerStatus.textContent = 'Paused';
       els.startPauseButton.textContent = 'Resume';
-    } else {
-      els.timerStatus.textContent = timer.mode === 'listen' ? 'Ready when you are' : 'Give your ears a quiet moment';
+    } else if (timer.status === 'armed') {
+      els.timerStatus.textContent = timer.mode === 'listen'
+        ? 'Start your music, then tap Start below'
+        : 'Find a quiet spot, then tap Start below';
       els.startPauseButton.textContent = timer.mode === 'listen' ? 'Start listening' : 'Start break';
+    } else {
+      els.timerStatus.textContent = timer.mode === 'listen'
+        ? 'Pick a duration, then tap Ready to start'
+        : 'Pick a break length, then tap Ready to start';
+      els.startPauseButton.textContent = 'Ready to start';
+    }
+
+    if (els.livePill) {
+      const pillLabel = timer.status === 'running'
+        ? 'Live'
+        : timer.status === 'armed'
+          ? 'Armed'
+          : 'Ready';
+      els.livePill.textContent = pillLabel;
+      els.livePill.classList.toggle('armed', timer.status === 'armed');
+      els.livePill.classList.toggle('live', timer.status === 'running');
     }
   }
 
@@ -440,7 +468,9 @@
     if (timer.remainingSec <= 0) {
       completeTimer();
     } else {
-      startInterval();
+      settleElapsedTime();
+      timer.status = 'paused';
+      saveTimer();
     }
   }
   render();

@@ -136,8 +136,12 @@ html[data-hw-beta="1"] #dashboardScanRow,
 html[data-hw-beta="1"] #homeAchievementsRow,
 html[data-hw-beta="1"] .gw-why-link,
 html[data-hw-beta="1"] #chWhySection{display:none!important;}
-html[data-hw-beta="1"] #hwBetaCompanionMount,
-html[data-hw-beta="1"] #hwBetaAuraCard{display:block!important;}
+html[data-hw-beta="1"] #hwBetaAuraCard,
+html[data-hw-beta="1"] #hwCompanionQuestStrip,
+#hwAvatarStudioWrap,
+#hwCompanionMount,
+#hwCompanionQuestStrip,
+#hwSanctuaryOverlay{display:none!important;}
 html[data-hw-beta="1"] #gamifyStack > #spotifyPlanBar{margin-bottom:14px;}
 html[data-hw-beta="1"] .hw-beta-aura-card{
   background:linear-gradient(135deg,#eef2ff,#f0f9ff);
@@ -160,7 +164,7 @@ html[data-hw-beta="1"] .hw-beta-aura-card p{
   line-height:1.5;
   margin:0;
 }
-html[data-hw-beta="1"] .hw-beta-companion-wrap{margin-bottom:14px;}
+html[data-hw-beta="1"] .hw-beta-companion-wrap{display:none!important;}
 .back-btn{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:10px;color:var(--txt-secondary);cursor:pointer;transition:all .2s;font-size:14px;font-weight:600;margin-bottom:24px;}
 .back-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-light);}
 
@@ -2649,9 +2653,8 @@ html[data-hw-beta="1"] .hw-beta-companion-wrap{margin-bottom:14px;}
           </div>
         </div>
 
-        <div id="hwBetaCompanionMount" class="hw-beta-companion-wrap">
-          <div id="hwCompanionMount" class="hw-companion-mount"></div>
-        </div>
+        <!-- Companion rewards live on Progress tab only (no home prompts) -->
+
         <div class="hw-beta-aura-card" id="hwBetaAuraCard" style="display:none;">
           <div class="hw-beta-aura-label"><i class="fa-solid fa-sparkles"></i> Aura</div>
           <p id="hwBetaAuraText">Connect Spotify and start today's quest.</p>
@@ -4064,11 +4067,6 @@ html[data-hw-beta="1"] .hw-beta-companion-wrap{margin-bottom:14px;}
           </div>
           <div class="weekly-days" id="progWeekDays"></div>
         </div>
-      </div>
-
-      <!-- ── COMPANION STUDIO (personal rewards, not leaderboard) ── -->
-      <div class="hw-avatar-studio-wrap" id="hwAvatarStudioWrap">
-        <div id="hwAvatarStudioMount"></div>
       </div>
 
       <!-- Ear stats + achievements (moved from Home for a cleaner dashboard) -->
@@ -5669,7 +5667,15 @@ html[data-hw-beta="1"] .hw-beta-companion-wrap{margin-bottom:14px;}
 <script src="demo-profiles.js"></script>
 <script src="hearing-future.js"></script>
 <script src="coach-engine.js"></script>
-<script src="companion-progression.js"></script>
+<script>
+(function () {
+  window.hwCompanionOnEvent = function () {};
+  window.hwCompanionOnStreakExtended = function () {};
+  window.hwCompanionTryProtectStreak = function () { return false; };
+  window.hwOpenSanctuary = function () {};
+  window.hwOpenAvatarStudio = function () {};
+})();
+</script>
 <script src="hearwise-orchestrator.js"></script>
 <script src="session-classifier.js"></script>
 <script>
@@ -18667,9 +18673,6 @@ const GAMIFY_ACHIEVEMENTS = [
   { id: 'session_sprint',  icon: '🏃', name: 'Session Sprinter',  desc: 'Keep 10 sessions under your safe limit', target: 10, progressKey: 'safeSessions' },
   { id: 'break_champion',  icon: '🏅', name: 'Break Champion',    desc: '7-day session-length streak',            target: 7,  progressKey: 'streak' },
   { id: 'ear_protector',   icon: '🏅', name: 'Ear Protector',     desc: 'Reach a 30-day safe-session streak',     target: 30, progressKey: 'streak' },
-  { id: 'first_evolution', icon: '🐰', name: 'First Upgrade',   desc: 'Upgrade your companion to Tier 2', target: 1, progressKey: 'companionStage' },
-  { id: 'rest_keeper',     icon: '☕', name: 'Rest Keeper',       desc: 'Complete 15 ear rests for your companions', target: 15, progressKey: 'companionRests' },
-  { id: 'focus_guardian',  icon: '🎯', name: 'Focus Guardian',    desc: 'Complete 10 focus blocks',               target: 10, progressKey: 'companionFocus' },
 ];
 
 function refreshProfileWithUserAge(profile) {
@@ -18885,17 +18888,12 @@ function renderHomeAchievements(profile) {
   const coaching = (typeof getCoachingState === 'function') ? getCoachingState() : { streak: 0, xp: 0 };
   const streak = Math.max(m.streak, coaching.streak || 0);
   const safeSessions = Math.min(10, m.safeSessionCount || Math.floor(streak * 0.6));
-  var compStats = (typeof hwCompanionProgression !== 'undefined' && hwCompanionProgression.getPayload)
-    ? hwCompanionProgression.getPayload().stats : {};
-  var compStage = (typeof hwCompanionProgression !== 'undefined' && hwCompanionProgression.getPayload)
-    ? Math.max(0, (hwCompanionProgression.getPayload().stage || 0)) : 0;
+  var compStats = {};
+  var compStage = 0;
 
   var html = GAMIFY_ACHIEVEMENTS.map(function(ach) {
     let prog = streak;
     if (ach.progressKey === 'safeSessions') prog = safeSessions;
-    if (ach.progressKey === 'companionStage') prog = compStage;
-    if (ach.progressKey === 'companionRests') prog = (compStats.earRests || 0) + (compStats.breaks || 0);
-    if (ach.progressKey === 'companionFocus') prog = compStats.focus || 0;
     const pct = Math.min(100, Math.round((prog / ach.target) * 100));
     const unlocked = pct >= 100;
     return '<div class="gw-ach-item' + (unlocked ? ' unlocked' : '') + '">' +
@@ -20910,8 +20908,8 @@ function lpGetWellnessTips(score, sessions) {
   var longest = sessions.length ? Math.max.apply(null, sessions.map(function(s) { return s.durationMin; })) : 0;
   if (total > 180) tips.push('You listened for ' + lpFormatDuration(total) + ' today — try shortening sessions or adding ear rests.');
   if (longest > 60) tips.push('Your longest stretch is ' + lpFormatDuration(longest) + '. Take a locked ear rest to recover.');
-  if (score >= 85) tips.push('Great habits! Accept your Daily Quest — Aura tracks sprints and ear rests to upgrade your companion.');
-  if (!tips.length) tips.push('Connect Spotify and take ear rests when prompted — you\'ll earn Resonance to decorate your companion.');
+  if (score >= 85) tips.push('Great habits! Accept your Daily Quest — Aura tracks sprints and ear rests toward your streak.');
+  if (!tips.length) tips.push('Connect Spotify and take ear rests when prompted — small breaks protect your hearing long-term.');
   return tips.slice(0, 2);
 }
 
@@ -20933,7 +20931,7 @@ function lpRenderGuideBar() {
 }
 
 function lpHighlightSection(targetId) {
-  ['lpInsights', 'lpEarRecoveryBlock', 'homeHearingPlan', 'wpMissionCard', 'chHabitsBlock', 'challengeHero', 'lpGuideBar', 'hwAvatarStudioWrap'].forEach(function(id) {
+  ['lpInsights', 'lpEarRecoveryBlock', 'homeHearingPlan', 'wpMissionCard', 'chHabitsBlock', 'challengeHero', 'lpGuideBar'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.classList.remove('lp-highlight-ring');
   });
@@ -20956,7 +20954,7 @@ function lpAuraGuideMessage(stepIdx) {
        (score < 80 ? ' There\'s room to improve — I\'ll show you how.' : ' Looking good so far!'),
     1: 'This is <strong>Live Ear Recovery</strong>. Connect Spotify and I\'ll track your noise dose, run safe-listening sprints, and <strong>lock a mandatory ear-rest timer</strong> when limits are hit. No headphones during recovery.',
     2: 'Daily mission is on your <strong>Home</strong> tab now: <strong>' + mission.title + '</strong>. ' + mission.desc.split('.')[0] + '.',
-    3: 'Your Daily Quest tracks ear habits from safe-listening sprints and ear rests — complete them to upgrade your companion and extend your streak.',
+    3: 'Your Daily Quest tracks safe-listening sprints and ear rests — complete them to extend your streak and protect your hearing.',
     4: score >= 85
       ? 'Strong plan! Ear Score is <strong>' + score + '/100</strong>. Finish your mission and habits to keep it there.'
       : 'To boost your Ear Score: ' + (tips[0] || 'use locked ear rests and keep volume under your cap.') +

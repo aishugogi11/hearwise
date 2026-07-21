@@ -263,6 +263,17 @@ h1 {
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.live-pill.armed {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.live-pill.live {
+  color: #047857;
+  background: #d1fae5;
 }
 
 .mode-switch {

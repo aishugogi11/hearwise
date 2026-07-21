@@ -975,10 +975,7 @@
     if (overlay && t && m) {
       t.textContent = early ? 'Recovery break — Auto-Pilot' : 'Recovery break';
       m.innerHTML = (customMsg ||
-        '<strong>Focus block complete.</strong> Stand up, look away from the screen, and hydrate.') +
-        (typeof global.hwCompanionProgression !== 'undefined'
-          ? '<br><span style="font-size:12px;color:#059669;margin-top:6px;display:inline-block;">🌸 Ear rests earn Care Tokens for your companion</span>'
-          : '');
+        '<strong>Focus block complete.</strong> Stand up, look away from the screen, and hydrate.');
       overlay.classList.add('show');
     }
     syncExistingUI();
@@ -1095,12 +1092,6 @@
               FocusModule.state.breaksThisSession + ' break' +
               (FocusModule.state.breaksThisSession === 1 ? '' : 's') : '') +
           ') · Total focus points: <strong>' + FocusModule.focusScore() + '</strong>.' +
-          (typeof global.hwCompanionProgression !== 'undefined'
-            ? (function () {
-              var p = global.hwCompanionProgression.getPayload();
-              return '<br><span style="font-size:12px;color:#059669;">' + p.emoji + ' ' + p.name + ' gained Harmony XP</span>';
-            })()
-            : '') +
           (actionLine ? '<br><span style="font-size:12px;color:#7c3aed;">Auto-Pilot: ' + actionLine + '</span>' : '');
       }
     } else {
