@@ -10169,6 +10169,12 @@ function onSpotifyAuthComplete(syncToken) {
 
 function connectSpotifyOAuth(options) {
   options = options || {};
+  if (/\.github\.io$/i.test(window.location.hostname)) {
+    var message = 'Spotify connection is not available in the public preview yet. Choose “Continue without Spotify” to use HearWise now.';
+    if (typeof showNotification === 'function') showNotification(message);
+    else window.alert(message);
+    return;
+  }
   var usePopup = options.popup !== false;
   localStorage.setItem('selectedProfile', (typeof st !== 'undefined' && st && st.profileId) || localStorage.getItem('selectedProfile') || 'aishwarya');
 

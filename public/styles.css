@@ -191,6 +191,26 @@ h1 {
   font-weight: 700;
 }
 
+.hero-launch {
+  width: fit-content;
+  margin-top: 22px;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+  z-index: 1;
+  color: #0284c7;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(3, 105, 161, 0.2);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.hero-launch:hover { transform: translateY(-1px); }
+
 .app-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(330px, 0.85fr);

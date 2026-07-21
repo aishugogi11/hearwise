@@ -6,6 +6,16 @@ on:
       - main
     paths:
       - "public/**"
+      - "index.html"
+      - "demo-profiles.js"
+      - "hearing-future.js"
+      - "coach-engine.js"
+      - "companion-progression.js"
+      - "hearwise-orchestrator.js"
+      - "session-classifier.js"
+      - "listening-sessions.js"
+      - "challenges.js"
+      - "hearwise-beta.js"
       - ".github/workflows/deploy-public-app.yml"
   workflow_dispatch:
 
@@ -31,10 +41,20 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload static app
+      - name: Assemble public site and original app
+        run: |
+          mkdir -p _site/app
+          cp -R public/. _site/
+          cp index.html _site/app/
+          cp demo-profiles.js hearing-future.js coach-engine.js _site/app/
+          cp companion-progression.js hearwise-orchestrator.js session-classifier.js _site/app/
+          cp listening-sessions.js challenges.js hearwise-beta.js _site/app/
+          touch _site/.nojekyll
+
+      - name: Upload public site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: public
+          path: _site
 
       - name: Deploy
         id: deployment
