@@ -6,13 +6,16 @@
   <meta name="theme-color" content="#102a2b">
   <meta name="description" content="HearWise is a private listening timer that helps you pace music sessions and remember restorative breaks.">
   <title>HearWise — Listening Timer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <header class="site-header">
     <a class="brand" href="./" aria-label="HearWise home">
-      <span class="brand-mark" aria-hidden="true">H</span>
-      <span>HearWise</span>
+      <span class="brand-mark" aria-hidden="true">◖</span>
+      <span class="brand-copy"><strong>HearWise</strong><small>Your listening companion</small></span>
     </a>
     <nav class="header-actions" aria-label="Quick links">
       <button class="text-button" id="privacyButton" type="button">Privacy</button>
@@ -24,13 +27,23 @@
 
   <main>
     <section class="hero">
-      <p class="eyebrow">Listen with intention</p>
-      <h1>Time your music.<br><span>Remember the break.</span></h1>
-      <p class="hero-copy">A simple listening timer that works with any music app. No account required. Your session history stays in this browser.</p>
+      <div class="hero-badge">HearWise</div>
+      <h1>Protect your ears while you listen</h1>
+      <p class="hero-copy">Build healthier listening habits with timed sessions and regular quiet breaks. Works with Spotify or any music app.</p>
+      <div class="hero-chips" aria-label="HearWise features">
+        <span>Track sessions</span>
+        <span>Remember breaks</span>
+        <span>Private by default</span>
+      </div>
     </section>
 
     <section class="app-grid" aria-label="Listening timer">
       <article class="timer-card">
+        <div class="card-heading">
+          <div class="card-heading-icon" aria-hidden="true">▶</div>
+          <div><p class="eyebrow">Recovery tracker</p><h2>Start a listening block</h2></div>
+          <span class="live-pill">Ready</span>
+        </div>
         <div class="mode-switch" role="group" aria-label="Timer mode">
           <button class="mode-button active" type="button" data-mode="listen">Listening</button>
           <button class="mode-button" type="button" data-mode="break">Break</button>
@@ -117,8 +130,8 @@
     </section>
 
     <section class="how-it-works">
-      <p class="eyebrow">Built for real use</p>
-      <h2>A calmer way to pace long listening days</h2>
+      <p class="eyebrow">Your listening plan</p>
+      <h2>A simple routine for long listening days</h2>
       <div class="steps">
         <article><span>1</span><h3>Choose a block</h3><p>Pick a listening duration that fits what you are doing.</p></article>
         <article><span>2</span><h3>Play anywhere</h3><p>Use Spotify or any music app while HearWise keeps time.</p></article>
