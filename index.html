@@ -1630,7 +1630,8 @@ html[data-hw-beta="1"] .hw-beta-companion-wrap{display:none!important;}
 .profile-setup-hint{font-size:11px;color:var(--txt-tertiary);text-align:center;margin-top:14px;line-height:1.4;}
 .session-pref-block{margin-bottom:14px;padding:14px;background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;}
 .session-pref-block:last-child{margin-bottom:0;}
-.session-pref-hd{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13px;font-weight:800;color:var(--txt-primary);}
+.session-pref-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;font-size:13px;font-weight:800;color:var(--txt-primary);}
+.session-pref-hd-main{display:flex;align-items:center;gap:8px;}
 .session-pref-chips{display:flex;flex-wrap:wrap;gap:6px;}
 .session-pref-chip{padding:6px 11px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg-card);font-size:11px;font-weight:700;color:var(--txt-secondary);cursor:pointer;font-family:inherit;transition:all .15s;}
 .session-pref-chip:hover{border-color:var(--primary);color:var(--primary);}
@@ -1668,6 +1669,17 @@ html[data-hw-beta="1"] .hw-beta-companion-wrap{display:none!important;}
 .hw-pref-section-hd{font-size:11px;font-weight:800;color:var(--txt-secondary);text-transform:uppercase;letter-spacing:.55px;margin-bottom:6px;display:flex;align-items:center;gap:7px;}
 .hw-pref-section-note{font-size:12px;color:var(--txt-secondary);line-height:1.45;margin-bottom:12px;}
 .hw-pref-divider{height:1px;background:var(--border);margin:18px 0;}
+.hw-custom-category-add{margin-top:14px;padding:14px;background:var(--bg-surface);border:1.5px dashed var(--border);border-radius:14px;}
+.hw-custom-category-add-hd{font-size:12px;font-weight:800;color:var(--txt-primary);margin-bottom:10px;}
+.hw-custom-category-fields{display:grid;grid-template-columns:1fr 56px 72px auto;gap:8px;align-items:end;}
+.hw-custom-category-fields label{display:flex;flex-direction:column;gap:4px;font-size:10px;font-weight:700;color:var(--txt-secondary);text-transform:uppercase;letter-spacing:.35px;}
+.hw-custom-category-fields input{padding:10px 11px!important;font-size:13px!important;border:1.5px solid var(--border)!important;border-radius:10px!important;background:var(--bg-card)!important;}
+.hw-custom-category-add-btn{padding:10px 14px;border:none;border-radius:10px;background:linear-gradient(135deg,#0ea5e9,#38bdf8);color:#fff;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.hw-custom-category-add-btn:hover{filter:brightness(1.05);}
+.session-pref-remove{padding:4px 8px;border:1px solid rgba(239,68,68,.35);border-radius:8px;background:rgba(239,68,68,.08);color:#dc2626;font-size:10px;font-weight:800;cursor:pointer;font-family:inherit;}
+.session-pref-remove:hover{background:rgba(239,68,68,.14);}
+.hw-timer-card-fixed .hw-timer-block-val{font-size:20px;}
+@media (max-width:640px){.hw-custom-category-fields{grid-template-columns:1fr 1fr;}.hw-custom-category-add-btn{grid-column:1/-1;}}
 
 /* ── Sound Sanctuary / Companions ── */
 .hw-companion-mount{margin-bottom:12px;}
@@ -11938,14 +11950,105 @@ function mergeSessionMusicPrefs(prefs) {
   return prefs;
 }
 
+function getSessionSurveyRows() {
+  if (typeof hwGetSessionMusicSurveyRows === 'function') return hwGetSessionMusicSurveyRows();
+  return typeof SESSION_MUSIC_SURVEY !== 'undefined' ? SESSION_MUSIC_SURVEY : [];
+}
+
+function getCustomSessionModesFromProfile() {
+  const p = getUserProfile() || {};
+  return Array.isArray(p.customSessionModes) ? p.customSessionModes : [];
+}
+
+function slugifyCategoryId(label) {
+  const base = String(label || 'session').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24) || 'session';
+  let id = 'custom_' + base;
+  const existing = getCustomSessionModesFromProfile();
+  let n = 1;
+  while (existing.some(function (c) { return c.id === id; })) {
+    id = 'custom_' + base + '_' + (++n);
+  }
+  return id;
+}
+
+function buildCustomCategoryAddHtml() {
+  return '<div class="hw-custom-category-add" id="hwCustomCategoryAdd">' +
+    '<div class="hw-custom-category-add-hd">+ Add your own category</div>' +
+    '<div class="hw-custom-category-fields">' +
+      '<label>Name<input type="text" id="hwCustomCatName" placeholder="e.g. Commute, Gym, Reading"></label>' +
+      '<label>Emoji<input type="text" id="hwCustomCatEmoji" maxlength="4" placeholder="✨" value="✨"></label>' +
+      '<label>Sprint<input type="number" id="hwCustomCatSprint" min="5" max="120" step="5" value="25"></label>' +
+      '<button type="button" class="hw-custom-category-add-btn" onclick="hwAddCustomSessionCategory()">Add</button>' +
+    '</div></div>';
+}
+
+function hwAddCustomSessionCategory() {
+  const nameEl = document.getElementById('hwCustomCatName');
+  const emojiEl = document.getElementById('hwCustomCatEmoji');
+  const sprintEl = document.getElementById('hwCustomCatSprint');
+  const label = nameEl ? String(nameEl.value || '').trim() : '';
+  if (!label) {
+    if (typeof showNotification === 'function') showNotification('Enter a category name first');
+    else alert('Enter a category name first');
+    return;
+  }
+  const emoji = emojiEl && emojiEl.value.trim() ? emojiEl.value.trim() : '✨';
+  let sprint = sprintEl ? parseInt(sprintEl.value, 10) : 25;
+  if (isNaN(sprint)) sprint = 25;
+  sprint = Math.max(5, Math.min(120, sprint));
+  const profile = getUserProfile() || {};
+  if (!Array.isArray(profile.customSessionModes)) profile.customSessionModes = [];
+  profile.customSessionModes.push({
+    id: slugifyCategoryId(label),
+    label: label,
+    emoji: emoji,
+    defaultSprintMins: sprint,
+    breakMins: 10,
+    tags: ['pop']
+  });
+  applyUserProfileToApp(profile);
+  if (nameEl) nameEl.value = '';
+  if (emojiEl) emojiEl.value = '✨';
+  if (sprintEl) sprintEl.value = '25';
+  if (typeof renderDrawerTimerSettings === 'function') renderDrawerTimerSettings();
+  ['sessionMusicPrefBlocks', 'lpMusicSurveyBlocks'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) {
+      const draft = id === 'lpMusicSurveyBlocks' ? _plannerMusicDraft : _profileSetupDraft;
+      renderSessionMusicPrefBlocks(id, draft);
+    }
+  });
+  if (typeof hwLsRenderAll === 'function') hwLsRenderAll();
+  if (typeof showNotification === 'function') showNotification('Added “' + label + '” category');
+}
+
+function hwRemoveCustomSessionCategory(modeId) {
+  if (!modeId || !window.confirm('Remove this custom category?')) return;
+  const profile = getUserProfile() || {};
+  profile.customSessionModes = (profile.customSessionModes || []).filter(function (c) { return c.id !== modeId; });
+  if (profile.sessionMusicPrefs) delete profile.sessionMusicPrefs[modeId];
+  if (profile.sessionMusicCustom) delete profile.sessionMusicCustom[modeId];
+  if (profile.sessionSprintMins) delete profile.sessionSprintMins[modeId];
+  applyUserProfileToApp(profile);
+  if (typeof renderDrawerTimerSettings === 'function') renderDrawerTimerSettings();
+  ['sessionMusicPrefBlocks', 'lpMusicSurveyBlocks'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) {
+      const draft = id === 'lpMusicSurveyBlocks' ? _plannerMusicDraft : _profileSetupDraft;
+      renderSessionMusicPrefBlocks(id, draft);
+    }
+  });
+  if (typeof hwLsRenderAll === 'function') hwLsRenderAll();
+}
+
 function renderDrawerTimerSettings() {
   var mount = document.getElementById('hwDrawerTimerCards');
-  if (!mount || typeof SESSION_MUSIC_SURVEY === 'undefined') return;
+  if (!mount) return;
   var profile = getUserProfile() || {};
   var draft = {
     sessionSprintMins: Object.assign({}, profile.sessionSprintMins || {})
   };
-  mount.innerHTML = SESSION_MUSIC_SURVEY.map(function (row) {
+  mount.innerHTML = getSessionSurveyRows().map(function (row) {
     return buildSessionTimerCardHtml(row, draft);
   }).filter(Boolean).join('');
 }
@@ -11957,11 +12060,32 @@ function buildSessionTimerCardHtml(row, draft) {
     ? hwLsIsModeSprintConfigurable(row.mode) : true;
   var sprintCfg = typeof hwLsGetSprintLimitsForMode === 'function'
     ? hwLsGetSprintLimitsForMode(row.mode) : { min: 15, max: 120 };
-  if (!configurable || sprintCfg.min === sprintCfg.max) return '';
   var defaultSprint = typeof hwLsGetDefaultSprintMinsForMode === 'function'
     ? hwLsGetDefaultSprintMinsForMode(row.mode) : 45;
   var breakMins = typeof hwLsGetBreakMinsForMode === 'function'
     ? hwLsGetBreakMinsForMode(row.mode) : 10;
+  if (!configurable || sprintCfg.min === sprintCfg.max) {
+    var fixedSprint = sprintCfg.min === sprintCfg.max ? sprintCfg.min : defaultSprint;
+    return '<div class="hw-timer-card hw-timer-card-fixed" data-mode-block="' + row.mode + '">' +
+      '<div class="hw-timer-card-hd">' +
+        '<span class="hw-timer-card-emoji">' + row.emoji + '</span>' +
+        '<span class="hw-timer-card-name">' + row.label + '</span>' +
+      '</div>' +
+      '<div class="hw-timer-flow">' +
+        '<div class="hw-timer-block listen">' +
+          '<div class="hw-timer-block-label">Listen</div>' +
+          '<div class="hw-timer-block-val">' + fixedSprint + '</div>' +
+          '<div class="hw-timer-block-unit">min sprint · fixed</div>' +
+        '</div>' +
+        '<div class="hw-timer-flow-arrow">→</div>' +
+        '<div class="hw-timer-block rest">' +
+          '<div class="hw-timer-block-label">Ear rest <span class="hw-timer-lock" title="Fixed for hearing safety">🔒</span></div>' +
+          '<div class="hw-timer-block-val">' + breakMins + '</div>' +
+          '<div class="hw-timer-block-unit">min fixed</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
   var sprintVal = draft.sessionSprintMins[row.mode] != null
     ? draft.sessionSprintMins[row.mode] : defaultSprint;
   return '<div class="hw-timer-card" data-mode-block="' + row.mode + '">' +
@@ -12001,8 +12125,11 @@ function buildSessionMusicBlockHtml(row, draft) {
     return '<button type="button" class="session-pref-chip" data-mode="' + row.mode + '" data-tag="' + tag + '" onclick="toggleSessionMusicPref(this)">' + label + '</button>';
   }).join('');
   var customVal = (draft.sessionMusicCustom[row.mode] || '').replace(/"/g, '&quot;');
+  var removeBtn = row.custom
+    ? '<button type="button" class="session-pref-remove" onclick="hwRemoveCustomSessionCategory(\'' + row.mode + '\')">Remove</button>'
+    : '';
   return '<div class="session-pref-block" data-mode-block="' + row.mode + '">' +
-    '<div class="session-pref-hd"><span>' + row.emoji + '</span><span>' + row.label + '</span></div>' +
+    '<div class="session-pref-hd"><span class="session-pref-hd-main"><span>' + row.emoji + '</span><span>' + row.label + '</span></span>' + removeBtn + '</div>' +
     '<div class="session-pref-chips">' + chips + '</div>' +
     '<div class="session-pref-custom">' +
       '<label class="session-pref-custom-label">Artists, genres &amp; playlists</label>' +
@@ -12016,12 +12143,13 @@ function renderSessionMusicPrefBlocks(containerId, draft) {
   containerId = containerId || 'sessionMusicPrefBlocks';
   draft = draft || _profileSetupDraft;
   const container = document.getElementById(containerId);
-  if (!container || typeof SESSION_MUSIC_SURVEY === 'undefined') return;
+  if (!container) return;
   if (!draft.sessionMusicCustom) draft.sessionMusicCustom = {};
-  var timerHtml = SESSION_MUSIC_SURVEY.map(function (row) {
+  var surveyRows = getSessionSurveyRows();
+  var timerHtml = surveyRows.map(function (row) {
     return buildSessionTimerCardHtml(row, draft);
   }).filter(Boolean).join('');
-  var musicHtml = SESSION_MUSIC_SURVEY.map(function (row) {
+  var musicHtml = surveyRows.map(function (row) {
     return buildSessionMusicBlockHtml(row, draft);
   }).join('');
   container.innerHTML =
@@ -12035,6 +12163,7 @@ function renderSessionMusicPrefBlocks(containerId, draft) {
       '<div class="hw-pref-section-hd"><i class="fa-solid fa-music"></i> Music detection</div>' +
       '<p class="hw-pref-section-note">Pick genres or type artists and playlists so HearWise matches the right session type.</p>' +
       musicHtml +
+      buildCustomCategoryAddHtml() +
     '</div>';
 }
 
@@ -12341,11 +12470,16 @@ function applyUserProfileToApp(profile) {
   if (profile.sessionSprintMins) {
     profile.sessionSprintMins = sanitizeSessionSprintMins(profile.sessionSprintMins);
   }
+  if (profile.customSessionModes && !Array.isArray(profile.customSessionModes)) {
+    profile.customSessionModes = [];
+  }
   try {
     localStorage.setItem('hearwise_user_profile', JSON.stringify(profile));
   } catch (e) { /* ignore */ }
   st.userProfile = profile;
   mergeUserProfileIntoState();
+  if (typeof hwRefreshSessionClassifierModes === 'function') hwRefreshSessionClassifierModes();
+  if (typeof hwLsRenderAll === 'function') hwLsRenderAll();
 
   if (typeof updateMLPredictionWithProfile === 'function') {
     updateMLPredictionWithProfile({

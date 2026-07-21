@@ -72,7 +72,7 @@
       if (copy[i]) el.textContent = copy[i];
     });
     var title = document.getElementById('dashboardHeaderTitle');
-    if (title) title.textContent = 'Your daily study companion';
+    if (title) title.textContent = 'Your daily listening companion';
     var headerSub = document.getElementById('dashboardHeaderSub');
     if (headerSub) {
       headerSub.textContent = 'Finish today\'s quest to protect your ears while you listen.';

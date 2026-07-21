@@ -40,6 +40,43 @@
     }
   };
 
+  function getCustomSessionModesFromProfile() {
+    try {
+      var raw = localStorage.getItem('hearwise_user_profile');
+      if (!raw) return [];
+      var list = JSON.parse(raw).customSessionModes;
+      return Array.isArray(list) ? list.filter(function (c) { return c && c.id && c.label; }) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function getCustomModeDef(custom) {
+    return {
+      label: custom.label,
+      defaultSprintMins: custom.defaultSprintMins || 25,
+      configurable: true,
+      emoji: custom.emoji || '✨',
+      bestFor: custom.bestFor || 'Your custom listening',
+      tip: 'Custom session — ear rest follows safe-listening guidelines.',
+      custom: true
+    };
+  }
+
+  function modeExists(mode) {
+    mode = normalizeMode(mode);
+    if (MODES[mode]) return true;
+    return getCustomSessionModesFromProfile().some(function (c) { return c.id === mode; });
+  }
+
+  function getAllModeKeys() {
+    var keys = Object.keys(MODES);
+    getCustomSessionModesFromProfile().forEach(function (c) {
+      if (keys.indexOf(c.id) < 0) keys.push(c.id);
+    });
+    return keys;
+  }
+
   /** Ear-rest durations — fixed from hearing-health research; not user-adjustable. */
   var RESEARCH_BREAK_MINS = {
     quick: 5,
@@ -328,24 +365,38 @@
 
   function clampSprintMins(mode, mins) {
     mode = normalizeMode(mode);
-    var lim = SPRINT_LIMITS[mode] || { min: 10, max: 120 };
+    var lim = SPRINT_LIMITS[mode];
+    if (!lim && modeExists(mode) && !MODES[mode]) lim = { min: 5, max: 120 };
+    if (!lim) lim = { min: 10, max: 120 };
     return Math.max(lim.min, Math.min(lim.max, Math.round(Number(mins) || lim.min)));
   }
 
   function getDefaultSprintMins(mode) {
     var key = normalizeMode(mode);
-    var base = MODES[key] || MODES.focus;
+    var base = MODES[key];
+    if (!base) {
+      var custom = getCustomSessionModesFromProfile().find(function (c) { return c.id === key; });
+      if (custom) return custom.defaultSprintMins || 25;
+      return MODES.focus.defaultSprintMins;
+    }
     return base.defaultSprintMins != null ? base.defaultSprintMins : 45;
   }
 
   function getResearchBreakMins(mode) {
     mode = normalizeMode(mode);
-    return RESEARCH_BREAK_MINS[mode] != null ? RESEARCH_BREAK_MINS[mode] : RESEARCH_BREAK_MINS.focus;
+    if (RESEARCH_BREAK_MINS[mode] != null) return RESEARCH_BREAK_MINS[mode];
+    var custom = getCustomSessionModesFromProfile().find(function (c) { return c.id === mode; });
+    if (custom && custom.breakMins) return custom.breakMins;
+    return RESEARCH_BREAK_MINS.focus;
   }
 
   function getModeConfig(mode) {
     var key = normalizeMode(mode);
-    var base = MODES[key] || MODES.focus;
+    var base = MODES[key];
+    if (!base) {
+      var custom = getCustomSessionModesFromProfile().find(function (c) { return c.id === key; });
+      base = custom ? getCustomModeDef(custom) : MODES.focus;
+    }
     return Object.assign({}, base, {
       sprintMins: getSprintMins({ mode: key }),
       breakMins: getResearchBreakMins(key)
@@ -392,14 +443,19 @@
 
   function getSprintLimitsForMode(mode) {
     mode = normalizeMode(mode);
-    return SPRINT_LIMITS[mode] || { min: 10, max: 120 };
+    if (SPRINT_LIMITS[mode]) return SPRINT_LIMITS[mode];
+    if (modeExists(mode) && !MODES[mode]) return { min: 5, max: 120 };
+    return { min: 10, max: 120 };
   }
 
   function isModeSprintConfigurable(mode) {
     mode = normalizeMode(mode);
     if (isPomodoroMode(mode)) return false;
     var cfg = MODES[mode];
-    return !!(cfg && cfg.configurable !== false && SPRINT_LIMITS[mode].min !== SPRINT_LIMITS[mode].max);
+    if (cfg) {
+      return !!(cfg.configurable !== false && SPRINT_LIMITS[mode].min !== SPRINT_LIMITS[mode].max);
+    }
+    return modeExists(mode);
   }
 
   function getModeLabel(mode) {
@@ -879,7 +935,7 @@
     opts = opts || {};
     if (!opts.auto && !opts.manual) return;
     mode = normalizeMode(mode);
-    if (!MODES[mode]) return;
+    if (!modeExists(mode)) return;
     var store = loadStore();
     var prevMode = store.active ? normalizeMode(store.active.mode || store.defaultMode) : null;
     var modeChanged = !!(store.active && prevMode && prevMode !== mode);
@@ -1124,7 +1180,7 @@
 
   function modeLegendHtml(activeMode) {
     return '<div class="ls-mode-legend">' +
-      Object.keys(MODES).map(function (key) {
+      getAllModeKeys().map(function (key) {
         var m = getModeConfig(key);
         var active = key === activeMode ? ' ls-mode-legend-active' : '';
         var pulse = key === activeMode && shouldFlashMode(activeMode) ? ' ls-mode-legend-flash' : '';
@@ -1240,8 +1296,8 @@
   function modeDisplayHtml(activeMode, manual) {
     var flash = shouldFlashMode(activeMode);
     return '<div class="ls-mode-row ls-mode-row-pick">' +
-      Object.keys(MODES).map(function (key) {
-        var m = MODES[key];
+      getAllModeKeys().map(function (key) {
+        var m = getModeConfig(key);
         var on = key === activeMode ? ' ls-mode-on' : '';
         var pulse = key === activeMode && flash ? ' ls-mode-flash' : '';
         var manualOn = manual && key === activeMode ? ' ls-mode-manual' : '';
@@ -1473,6 +1529,8 @@
     });
     return out;
   };
+  global.hwLsModeExists = modeExists;
+  global.hwLsGetAllModeKeys = getAllModeKeys;
   global.hwLsGetModeLabel = getModeLabel;
   global.hwLsPauseSafeSessionTracking = pauseSafeSessionTracking;
   global.hwLsHasActiveSession = function () {

@@ -59,6 +59,8 @@
   ];
 
   var MODE_STYLE_MAP = {
+    quick: ['pop', 'rnb', 'indie', 'jazz'],
+    studyQuick: ['lofi', 'classical', 'ambient', 'instrumental', 'podcast'],
     focus: ['lofi', 'classical', 'ambient', 'instrumental', 'podcast'],
     active: ['pop', 'rnb', 'edm', 'hiphop', 'rock', 'indie', 'jazz'],
     sleep: ['whitenoise', 'piano', 'audiobook', 'ambient']
@@ -133,18 +135,64 @@
   ];
 
   var MODE_LABELS = { focus: 'Focus & Study', active: 'Chill & Workout', sleep: 'Sleep', quick: '1-Min Sprint', studyQuick: '1-Min Focus & Study' };
-  var MODES = ['focus', 'active', 'sleep', 'studyQuick'];
+  var MODES = ['quick', 'studyQuick', 'focus', 'active', 'sleep'];
+
+  function getCustomSessionModes() {
+    try {
+      var raw = localStorage.getItem('hearwise_user_profile');
+      if (!raw) return [];
+      var list = JSON.parse(raw).customSessionModes;
+      return Array.isArray(list) ? list.filter(function (c) { return c && c.id && c.label; }) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function refreshClassifierModes() {
+    MODES.length = 0;
+    ['quick', 'studyQuick', 'focus', 'active', 'sleep'].forEach(function (m) { MODES.push(m); });
+    getCustomSessionModes().forEach(function (c) {
+      if (MODES.indexOf(c.id) < 0) MODES.push(c.id);
+      MODE_LABELS[c.id] = c.label;
+      if (c.tags && c.tags.length) MODE_STYLE_MAP[c.id] = c.tags.slice();
+    });
+  }
+
+  function getSurveyRows() {
+    refreshClassifierModes();
+    var rows = SESSION_MUSIC_SURVEY.slice();
+    getCustomSessionModes().forEach(function (c) {
+      rows.push({
+        mode: c.id,
+        label: c.label,
+        emoji: c.emoji || '✨',
+        tags: c.tags || ['pop'],
+        custom: true
+      });
+    });
+    return rows;
+  }
+
+  function emptyModeScores() {
+    refreshClassifierModes();
+    var scores = {};
+    MODES.forEach(function (mode) { scores[mode] = 0; });
+    return scores;
+  }
 
   var _contextCache = {};
   var _lastTrackId = null;
   var _inFlight = null;
   var _manualModeLock = null;
 
-  global.SESSION_MUSIC_SURVEY = [
+  var SESSION_MUSIC_SURVEY = [
+    { mode: 'quick', label: '1-Min Sprint', emoji: '⚡', tags: ['pop', 'rnb', 'indie'] },
+    { mode: 'studyQuick', label: '1-Min Focus & Study', emoji: '📚', tags: ['lofi', 'classical', 'ambient', 'instrumental'] },
     { mode: 'focus', label: 'Focus & Study', emoji: '🎯', tags: ['lofi', 'classical', 'ambient', 'instrumental', 'podcast'] },
     { mode: 'active', label: 'Chill & Workout', emoji: '🎵', tags: ['pop', 'rnb', 'indie', 'jazz', 'edm', 'hiphop', 'rock'] },
     { mode: 'sleep', label: 'Sleep', emoji: '🌙', tags: ['whitenoise', 'piano', 'ambient', 'audiobook'] }
   ];
+  global.SESSION_MUSIC_SURVEY = SESSION_MUSIC_SURVEY;
 
   function normalizeMode(mode) {
     if (mode === 'study') return 'focus';
@@ -732,7 +780,7 @@
   }
 
   function resolveMode(styleScores, prefs, customByMode, track, meta) {
-    var modeScores = { focus: 0, active: 0, sleep: 0 };
+    var modeScores = emptyModeScores();
     var hasPrefs = MODES.some(function (m) {
       return (prefs[m] && prefs[m].length) || parseCustomEntries((customByMode || {})[m]).length;
     });
@@ -1199,5 +1247,8 @@
     _manualModeLock = null;
   };
   global.SESSION_STYLE_TAGS = STYLE_TAGS;
+  global.hwGetSessionMusicSurveyRows = getSurveyRows;
+  global.hwRefreshSessionClassifierModes = refreshClassifierModes;
+  refreshClassifierModes();
 
 })(typeof window !== 'undefined' ? window : global);
