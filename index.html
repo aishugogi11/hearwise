@@ -30,6 +30,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Menlo&family=Consolas&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+<link rel="stylesheet" href="feedback-widget.css"/>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
 <style>
@@ -1261,6 +1262,8 @@ html[data-hw-beta="1"] .hw-beta-companion-wrap{display:none!important;}
 .aura-fab-badge{position:absolute;top:-2px;right:-2px;min-width:18px;height:18px;padding:0 5px;border-radius:10px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid #fff;}
 .aura-fab.pulse{animation:aura-fab-pulse 2s ease-in-out infinite;}
 @keyframes aura-fab-pulse{0%,100%{box-shadow:0 8px 28px rgba(99,102,241,0.45);}50%{box-shadow:0 8px 28px rgba(99,102,241,0.45),0 0 0 10px rgba(99,102,241,0.2);}}
+.hw-feedback-app{bottom:82px;}
+@media (max-width:540px){.hw-feedback-app{bottom:78px;}}
 .aura-panel{position:fixed;bottom:148px;right:20px;width:min(360px,calc(100vw - 40px));max-height:min(520px,calc(100vh - 180px));background:var(--bg-card);border:1.5px solid var(--border);border-radius:20px;box-shadow:0 16px 48px rgba(0,0,0,0.18);z-index:249;display:none;flex-direction:column;overflow:hidden;font-family:inherit;}
 .aura-panel.open{display:flex;animation:aura-slide-up .35s cubic-bezier(0.22,1,0.36,1);}
 @keyframes aura-slide-up{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
@@ -5574,6 +5577,21 @@ html[data-hw-beta="1"] .hw-beta-companion-wrap{display:none!important;}
         <i class="fa-solid fa-rotate-right"></i> Start Fresh
       </button>
     </div>
+  </div>
+
+  <!-- ══ FEEDBACK SURVEY (bottom-left) ══ -->
+  <div class="hw-feedback hw-feedback-app" id="hwFeedbackWidget" aria-live="polite">
+    <div class="hw-feedback-panel" id="hwFeedbackPanel" hidden>
+      <button type="button" class="hw-feedback-close" id="hwFeedbackClose" aria-label="Close feedback prompt">×</button>
+      <div class="hw-feedback-avatar" aria-hidden="true">💬</div>
+      <p class="hw-feedback-title">Got a minute?</p>
+      <p class="hw-feedback-text">Help us improve HearWise — your feedback shapes what we build next.</p>
+      <a class="hw-feedback-cta" id="hwFeedbackCta" href="#" target="_blank" rel="noopener noreferrer">Share feedback</a>
+      <button type="button" class="hw-feedback-later" id="hwFeedbackLater">Maybe later</button>
+    </div>
+    <button type="button" class="hw-feedback-fab" id="hwFeedbackFab" aria-label="Share feedback" aria-expanded="false">
+      <span aria-hidden="true">💬</span>
+    </button>
   </div>
 
   <!-- ══ AURA FLOATING COACH (bottom-right) ══ -->
@@ -22497,6 +22515,7 @@ document.addEventListener('hearwise:appReady', () => {
 });
 </script>
 <script src="hearwise-beta.js"></script>
+<script src="feedback-widget.js"></script>
 
 </body>
 </html>

@@ -125,7 +125,8 @@
     breakPauseInProgress: false,
     sprintAwaitingContinue: false,
     frozenListeningMin: null,
-    sprintHoldingForBreak: false
+    sprintHoldingForBreak: false,
+    manualArmed: false
   };
 
   function isSprintTimerHeld() {
@@ -143,8 +144,14 @@
     saveStore(store);
   }
 
+  function isManualOnlySession(session) {
+    return !!(session && session.manualOnly);
+  }
+
   function isSpotifyPaused() {
     if (isBreakLocked() || _state.sprintAwaitingContinue || _state.breakPauseInProgress) return false;
+    var store = loadStore();
+    if (store.active && isManualOnlySession(store.active)) return false;
     if (_state.pauseStartedAt == null) return false;
     var pb = typeof global._lpLastPlayback !== 'undefined' ? global._lpLastPlayback : null;
     if (pb && pb.is_playing && pb.item) return false;
@@ -569,6 +576,7 @@
     _state.frozenListeningMin = null;
     _state.pauseStartedAt = null;
     _state.sprintHoldingForBreak = false;
+    _state.manualArmed = false;
     return store;
   }
 
@@ -584,6 +592,7 @@
         notifyModeHighlight(mode, true);
       }
     } else {
+      mode = normalizeMode(store.defaultMode || 'active');
       store.defaultMode = mode;
     }
 
@@ -627,6 +636,40 @@
       global.hwUpdateSpotifyPollCadence();
     }
     return store;
+  }
+
+  function startManualSession() {
+    if (isBreakLocked()) return;
+    var store = loadStore();
+    if (store.active) return;
+    var now = Date.now();
+    var mode = effectiveDisplayMode(store);
+    store = startSession(store, null, now);
+    store.active.mode = mode;
+    store.active.detectedMode = mode;
+    store.active.manualOnly = true;
+    store.active.modeManual = true;
+    store.active.autoDetected = false;
+    store.active.modeReason = 'Manual timer — ' + getModeConfig(mode).label;
+    _state.manualArmed = false;
+    saveStore(store);
+    startUiTick();
+    if (typeof global.showXpToast === 'function') {
+      global.showXpToast(5, 'Listening sprint started');
+    }
+    renderAll();
+  }
+
+  function manualStartClick() {
+    if (isBreakLocked()) return;
+    var store = loadStore();
+    if (store.active) return;
+    if (!_state.manualArmed) {
+      _state.manualArmed = true;
+      renderAll();
+      return;
+    }
+    startManualSession();
   }
 
   function updateActiveFromPlayback(store, pb, now) {
@@ -694,6 +737,11 @@
       startUiTick();
     } else {
       _state.lastPlayTickAt = null;
+      if (store.active && isManualOnlySession(store.active)) {
+        saveStore(store);
+        renderAll();
+        return;
+      }
       if (store.active && !_state.pauseStartedAt && !isBreakLocked() && !_state.breakPauseInProgress) {
         snapshotListeningPause(store, now);
         _state.pauseStartedAt = now;
@@ -1235,11 +1283,18 @@
       '</div>';
     }
     if (!isLive) {
-      return '<div class="ls-sprint-wrap ls-sprint-idle">' +
+      var armed = _state.manualArmed;
+      var btnLabel = armed ? 'Start listening' : 'Ready to start';
+      var hint = armed
+        ? 'Start your music or podcast, then tap Start listening'
+        : 'Pick a session type above, then tap Ready to start';
+      return '<div class="ls-sprint-wrap ls-sprint-idle' + (armed ? ' ls-sprint-await' : '') + '">' +
         '<div class="ls-sprint-hd"><span>' + modeCfg.emoji + ' ' + esc(modeCfg.label) + '</span>' +
         '<span>' + sprint + ' min sprints</span></div>' +
-        '<div class="ls-sprint-countdown">Ready to start<small>Press play on Spotify — Aura picks your session type and starts the sprint timer</small></div>' +
+        '<div class="ls-sprint-countdown">' + (armed ? 'Ready to go' : 'Ready to start') +
+        '<small>' + hint + '</small></div>' +
         '<div class="ls-sprint-track"><div class="ls-sprint-fill" style="width:0%"></div></div>' +
+        '<button type="button" class="ls-sprint-continue-btn" onclick="hwLsManualStartClick()">' + btnLabel + '</button>' +
       '</div>';
     }
     if (isSpotifyPaused()) {
@@ -1394,7 +1449,6 @@
     var list = document.getElementById('lpListeningSessionsList');
     if (!list) return;
     var store = loadStore();
-    var enabled = isTrackingEnabled();
 
     if (block) block.style.display = 'block';
 
@@ -1405,11 +1459,13 @@
     if (store.active) {
       refreshActiveMetrics(store, Date.now());
       html += sessionCardHtml(store.active, true);
-    } else if (enabled) {
-      html += sprintPreviewHtml(store.defaultMode || 'focus') +
-        '<div class="ls-idle" style="margin-top:8px;">Press play on Spotify — Aura detects your session type from the song, selects the mode, and starts timing automatically.</div>';
     } else {
-      html = '<div class="ls-idle">Connect Spotify for live dose tracking and mandatory ear rests — no calendar planning required.</div>';
+      html += sprintPreviewHtml(store.defaultMode || effectiveDisplayMode(store));
+      if (isTrackingEnabled()) {
+        html += '<div class="ls-idle" style="margin-top:8px;">Spotify connected — press play to auto-detect session type, or use Ready to start above for a manual timer.</div>';
+      } else {
+        html += '<div class="ls-idle" style="margin-top:8px;">No Spotify needed — tap Ready to start for a manual listening sprint with mandatory ear rests.</div>';
+      }
     }
     list.innerHTML = html;
     updateBreakNudgeUI();
@@ -1438,6 +1494,7 @@
       }
       refreshActiveMetrics(store, Date.now());
       saveStore(store);
+      checkProductivityNudges(store, Date.now());
       renderAll();
       if (isBreakLocked()) updateBreakNudgeUI();
       if (typeof hwUpdateLiveSpotifyUI === 'function' && typeof _lpLastPlayback !== 'undefined') {
@@ -1493,6 +1550,8 @@
     renderAll();
   }
 
+  global.hwLsManualStartClick = manualStartClick;
+  global.hwLsStartManualSession = startManualSession;
   global.hwLsOnPlayback = onPlayback;
   global.hwLsRenderAll = renderAll;
   global.hwLsRenderHome = renderHome;

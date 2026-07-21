@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./feedback-widget.css">
 </head>
 <body>
   <header class="site-header">
@@ -163,6 +164,22 @@
   </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <div class="hw-feedback" id="hwFeedbackWidget" aria-live="polite">
+    <div class="hw-feedback-panel" id="hwFeedbackPanel" hidden>
+      <button type="button" class="hw-feedback-close" id="hwFeedbackClose" aria-label="Close feedback prompt">×</button>
+      <div class="hw-feedback-avatar" aria-hidden="true">💬</div>
+      <p class="hw-feedback-title">Got a minute?</p>
+      <p class="hw-feedback-text">Help us improve HearWise — your feedback shapes what we build next.</p>
+      <a class="hw-feedback-cta" id="hwFeedbackCta" href="#" target="_blank" rel="noopener noreferrer">Share feedback</a>
+      <button type="button" class="hw-feedback-later" id="hwFeedbackLater">Maybe later</button>
+    </div>
+    <button type="button" class="hw-feedback-fab" id="hwFeedbackFab" aria-label="Share feedback" aria-expanded="false">
+      <span aria-hidden="true">💬</span>
+    </button>
+  </div>
+
   <script src="./app.js" defer></script>
+  <script src="./feedback-widget.js" defer></script>
 </body>
 </html>
