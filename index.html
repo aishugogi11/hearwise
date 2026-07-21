@@ -63,6 +63,12 @@ body{min-height:100vh;background:var(--bg);color:var(--txt-primary);font-family:
 .ai-badge i{font-size:10px;}
 
 .profile-selector{margin-bottom:24px;}
+.profile-user-card{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:12px;border:1.5px solid var(--border);background:var(--bg-card);}
+.profile-user-avatar{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,#e0f2fe,#f0f9ff);font-size:20px;}
+.profile-user-copy{min-width:0;flex:1;}
+.profile-user-name{font-size:14px;font-weight:800;color:var(--txt-primary);}
+.profile-user-meta{font-size:11px;color:var(--txt-secondary);margin-top:3px;line-height:1.35;}
+.profile-privacy-note{font-size:10px;color:var(--txt-tertiary);line-height:1.4;margin:8px 2px 0;}
 .profile-label{font-size:11px;color:var(--txt-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;font-weight:700;}
 .profile-btn{display:block;width:100%;text-align:left;padding:14px 16px;margin-bottom:8px;border-radius:12px;border:1.5px solid var(--border);background:var(--bg-card);cursor:pointer;transition:all .2s;}
 .profile-btn:hover{border-color:var(--primary);background:var(--primary-light);}
@@ -2184,24 +2190,16 @@ html[data-hw-beta="1"] .hw-beta-companion-wrap{display:none!important;}
     <div class="ai-badge"><i class="fa-solid fa-shield-heart"></i> Protect Your Hearing</div>
   </div>
 
-  <div class="profile-selector">
-    <div class="profile-label">Sample Profile</div>
-    <button type="button" class="profile-btn" data-profile="safe" onclick="selectProfile('safe')">
-      <div class="profile-btn-name">Safe Listener</div>
-      <div class="profile-btn-meta" data-profile-meta="safe">—</div>
-    </button>
-    <button type="button" class="profile-btn" data-profile="student" onclick="selectProfile('student')">
-      <div class="profile-btn-name">Typical Student</div>
-      <div class="profile-btn-meta" data-profile-meta="student">—</div>
-    </button>
-    <button type="button" class="profile-btn" data-profile="highRisk" onclick="selectProfile('highRisk')">
-      <div class="profile-btn-name">High-Risk Listener</div>
-      <div class="profile-btn-meta" data-profile-meta="highRisk">—</div>
-    </button>
-    <button type="button" class="profile-btn active" data-profile="aishwarya" onclick="selectProfile('aishwarya')">
-      <div class="profile-btn-name">Aishu</div>
-      <div class="profile-btn-meta" data-profile-meta="aishwarya">🔴 Connected</div>
-    </button>
+  <div class="profile-selector" id="userProfileSidebar">
+    <div class="profile-label">Your profile</div>
+    <div class="profile-user-card" id="sidebarUserProfileCard">
+      <div class="profile-user-avatar" aria-hidden="true">👤</div>
+      <div class="profile-user-copy">
+        <div class="profile-user-name" id="sbProfile">You</div>
+        <div class="profile-user-meta" id="sidebarUserProfileMeta">Private · this device only</div>
+      </div>
+    </div>
+    <p class="profile-privacy-note"><i class="fa-solid fa-lock" style="font-size:10px;margin-right:4px;"></i> Your name and listening data stay on this device.</p>
   </div>
 
   <div class="mode-selector">
@@ -2264,24 +2262,33 @@ html[data-hw-beta="1"] .hw-beta-companion-wrap{display:none!important;}
       <div class="profile-setup-card">
         <div class="profile-setup-hd">
           <div class="profile-setup-icon"><i class="fa-solid fa-ear-listen"></i></div>
-          <div class="profile-setup-title">Quick survey</div>
-          <div class="profile-setup-sub">Age and headphones — so HearWise can personalize your hearing age and safe-volume targets.</div>
+          <div class="profile-setup-title">Create your profile</div>
+          <div class="profile-setup-sub">Your name, age, and headphones — stored only on this device to personalize your hearing plan.</div>
         </div>
         <div class="profile-setup-steps" id="profileSetupSteps">
           <div class="profile-setup-dot active" data-step="1"></div>
           <div class="profile-setup-dot" data-step="2"></div>
+          <div class="profile-setup-dot" data-step="3"></div>
         </div>
 
-        <!-- Step 1: Age -->
+        <!-- Step 1: Name -->
         <div class="profile-setup-panel" id="profileSetupPanel1">
+          <div class="profile-setup-q">
+            <label class="profile-setup-label" for="setupName">What should we call you?</label>
+            <input class="profile-setup-input" type="text" id="setupName" maxlength="40" placeholder="e.g. Alex" autocomplete="name"/>
+          </div>
+        </div>
+
+        <!-- Step 2: Age -->
+        <div class="profile-setup-panel" id="profileSetupPanel2" style="display:none;">
           <div class="profile-setup-q">
             <label class="profile-setup-label" for="setupAge">How old are you?</label>
             <input class="profile-setup-input" type="number" id="setupAge" min="13" max="100" placeholder="e.g. 17" inputmode="numeric"/>
           </div>
         </div>
 
-        <!-- Step 2: Headphones -->
-        <div class="profile-setup-panel" id="profileSetupPanel2" style="display:none;">
+        <!-- Step 3: Headphones -->
+        <div class="profile-setup-panel" id="profileSetupPanel3" style="display:none;">
           <div class="profile-setup-q">
             <span class="profile-setup-label">What type of headphones do you use most?</span>
             <div class="profile-setup-options" id="setupHeadphoneOpts">
@@ -5477,29 +5484,20 @@ html[data-hw-beta="1"] .hw-beta-companion-wrap{display:none!important;}
     </div>
 
     <div class="hw-drawer-section">
-      <div class="hw-drawer-label">Listening Profile</div>
-      <button type="button" class="profile-btn" data-profile="safe" onclick="selectProfile('safe');hwCloseSettings()">
-        <div class="profile-btn-name">Safe Listener</div>
-        <div class="profile-btn-meta" data-profile-meta="safe">—</div>
-      </button>
-      <button type="button" class="profile-btn" data-profile="student" onclick="selectProfile('student');hwCloseSettings()">
-        <div class="profile-btn-name">Typical Student</div>
-        <div class="profile-btn-meta" data-profile-meta="student">—</div>
-      </button>
-      <button type="button" class="profile-btn" data-profile="highRisk" onclick="selectProfile('highRisk');hwCloseSettings()">
-        <div class="profile-btn-name">High-Risk Listener</div>
-        <div class="profile-btn-meta" data-profile-meta="highRisk">—</div>
-      </button>
-      <button type="button" class="profile-btn active" data-profile="aishwarya" onclick="selectProfile('aishwarya');hwCloseSettings()">
-        <div class="profile-btn-name">Aishu</div>
-        <div class="profile-btn-meta" data-profile-meta="aishwarya">🔴 Connected</div>
-      </button>
+      <div class="hw-drawer-label">Your profile</div>
+      <div class="profile-user-card" style="margin-bottom:10px;">
+        <div class="profile-user-avatar" aria-hidden="true">👤</div>
+        <div class="profile-user-copy">
+          <div class="profile-user-name" id="drawerUserProfileName">You</div>
+          <div class="profile-user-meta" id="drawerUserProfileMeta">Private · this device only</div>
+        </div>
+      </div>
     </div>
 
     <div class="hw-drawer-section">
       <div class="hw-drawer-label">Your Info</div>
       <button type="button" onclick="localStorage.removeItem('hearwise_user_profile');hwCloseSettings();showUserProfileSetup();" style="width:100%;padding:11px;background:var(--bg-surface);color:var(--txt-primary);border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px;">
-        <i class="fa-solid fa-user-pen"></i> Update age & headphones
+        <i class="fa-solid fa-user-pen"></i> Update name, age & headphones
       </button>
       <button type="button" onclick="localStorage.removeItem('hearwise_welcome_tour_done');hwCloseSettings();if(typeof auraWelcomeStart==='function')auraWelcomeStart();" style="width:100%;padding:11px;background:var(--bg-surface);color:var(--txt-primary);border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">
         <i class="fa-solid fa-route"></i> Replay app tour with Aura
@@ -5715,7 +5713,7 @@ const FALLBACK_TRACKS = [
 ];
 
 let st = {
-  profileId: 'aishwarya',
+  profileId: 'user',
   profile: null,
   simulationMode: 'current',
   challenges: [], // Active challenges with progress
@@ -5820,73 +5818,55 @@ const DEMO_ACHIEVEMENTS = {
 };
 
 function hwQuickProfile(id) {
-  // Update strip active state
-  ['safe','student','highRisk','aishwarya'].forEach(function(pid) {
-    var btn = document.getElementById('psBtn-' + pid);
-    if (btn) btn.classList.toggle('active', pid === id);
+  loadUserProfile();
+}
+
+function getProfileDisplayName() {
+  const up = typeof getUserProfile === 'function' ? getUserProfile() : null;
+  return (up && up.displayName) ? up.displayName : (st.profile && st.profile.name) || 'You';
+}
+
+function updateUserProfileLabels() {
+  const name = getProfileDisplayName();
+  ['sbProfile', 'drawerUserProfileName'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = name;
   });
-  // Sync sidebar profile buttons too
-  document.querySelectorAll('.profile-btn[data-profile]').forEach(function(btn) {
-    btn.classList.toggle('active', btn.dataset.profile === id);
-  });
-  selectProfile(id);
 }
 
 function selectProfile(id) {
-  st.profileId = id;
-  st.profile = getEnrichedDemoProfile(id);
+  loadUserProfile();
+}
+
+function loadUserProfile() {
+  st.profileId = 'user';
+  st.profile = getEnrichedDemoProfile('user');
   st.prediction = st.profile.prediction || null;
-  if (id === 'aishwarya' && typeof hwRestoreLiveProfileFromSpotify === 'function') {
-    hwRestoreLiveProfileFromSpotify();
-  }
+  if (typeof hwRestoreLiveProfileFromSpotify === 'function') hwRestoreLiveProfileFromSpotify();
   if (typeof mergeUserProfileIntoState === 'function') mergeUserProfileIntoState();
   else if (typeof refreshProfileWithUserAge === 'function') {
     refreshProfileWithUserAge(st.profile);
     st.prediction = st.profile.prediction || null;
   }
-  const names = { safe:'Safe Listener', student:'Typical Student', highRisk:'High-Risk Listener', aishwarya:'Aishu' };
-  const sbp = document.getElementById('sbProfile');
-  if (sbp) sbp.textContent = names[id] || id;
+  updateUserProfileLabels();
   st.simulationMode = 'current';
-  // Sync quick-strip active state
-  ['safe','student','highRisk','aishwarya'].forEach(function(pid) {
-    var btn = document.getElementById('psBtn-' + pid);
-    if (btn) btn.classList.toggle('active', pid === id);
-  });
 
-  // Initialize scores from profile before syncing UI
   if (st.profile) {
     var hfInit = st.profile.prediction && st.profile.prediction.hearingFuture;
     st.hearingHealthScore = st.profile.healthScore || (hfInit && hfInit.currentHealthScore) || 85;
     st.hearingAge = typeof resolveHearingAge === 'function'
       ? resolveHearingAge(st.profile, st.prediction || st.profile.prediction)
       : (st.profile.chronologicalAge || 22);
-    if (id === 'safe') {
-      st.safetyScore = 75;
-      st.riskScore = 25;
-    } else if (id === 'student') {
-      st.safetyScore = 50;
-      st.riskScore = 50;
-    } else if (id === 'highRisk') {
-      st.safetyScore = 25;
-      st.riskScore = 75;
-    }
+    st.safetyScore = 60;
+    st.riskScore = 40;
   }
 
-  // Show/hide views and cards based on profile
-  if (id === 'aishwarya') {
-    const profile = DEMO_PROFILES.aishwarya;
-    const liveStats = typeof hwSpotifyWeeklyStats === 'function' ? hwSpotifyWeeklyStats() : null;
-    if (liveStats) {
-      generatePersonalizedRecommendations(liveStats);
-    } else if (profile && profile.spotify && profile.spotify.weeklyStats) {
-      generatePersonalizedRecommendations(profile.spotify.weeklyStats);
-    }
-    
-    // Hide Slack integration for Aishwarya profile
-    document.querySelectorAll('.mode-selector').forEach(el => {
-      if (el.textContent.includes('Slack')) el.style.display = 'none';
-    });
+  const liveStats = typeof hwSpotifyWeeklyStats === 'function' ? hwSpotifyWeeklyStats() : null;
+  if (liveStats && typeof generatePersonalizedRecommendations === 'function') {
+    generatePersonalizedRecommendations(liveStats);
+  }
+
+  if (_spotifyConnected) {
     if (typeof showSpotifyCard === 'function') showSpotifyCard();
     if (typeof hwRecalcLiveMetrics === 'function') hwRecalcLiveMetrics();
     if (typeof hwStartSpotifyLiveOnce === 'function') hwStartSpotifyLiveOnce();
@@ -5902,67 +5882,26 @@ function selectProfile(id) {
       });
     }
   } else {
-    hideSpotifyCard();
-    stopSpotifyPolling();
-
+    if (typeof hideSpotifyCard === 'function') hideSpotifyCard();
+    if (typeof stopSpotifyPolling === 'function') stopSpotifyPolling();
     if (typeof renderDashboardHeader === 'function') renderDashboardHeader();
-
   }
 
-  // Refresh dashboard only when survey is done and dashboard is unlocked
   if (typeof canShowDashboard === 'function' && canShowDashboard()) {
     if (typeof renderHomeEnhancements === 'function') renderHomeEnhancements();
   }
 
   if (typeof refreshProfileSidebarMeta === 'function') refreshProfileSidebarMeta();
-  // Load demo completed challenges and achievements for the active profile
-  st.completedChallenges = DEMO_COMPLETED_CHALLENGES[id] || [];
-  st.achievements = DEMO_ACHIEVEMENTS[id] || [];
-  
-  // Calculate future risk improvement from completed challenges
-  st.futureRiskImprovement = st.completedChallenges.reduce((total, challenge) => {
-    return total + (challenge.expectedImpact.hearingRiskAge || 0);
-  }, 0);
-  
-  // Live profile only — demo personas keep engine scores (challenges are display-only)
-  if (id === 'aishwarya') {
-    st.completedChallenges.forEach(challenge => {
-      if (challenge.expectedImpact.safetyScore) {
-        st.safetyScore = Math.min(100, st.safetyScore + challenge.expectedImpact.safetyScore);
-      }
-      if (challenge.expectedImpact.riskScore) {
-        st.riskScore = Math.max(0, st.riskScore + challenge.expectedImpact.riskScore);
-      }
-      if (challenge.expectedImpact.wellnessScore) {
-        st.hearingHealthScore = Math.min(100, st.hearingHealthScore + challenge.expectedImpact.wellnessScore);
-      }
-    });
-  }
-  
-  document.querySelectorAll('.profile-btn').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.profile === id);
-  });
-
-  if (id !== 'aishwarya') {
-    if (typeof lpSeedProfileDemoPlan === 'function') lpSeedProfileDemoPlan(true);
-    if (typeof hwLsSeedProfileDemo === 'function') hwLsSeedProfileDemo();
-    if (typeof hwMaybeRecalcLiveMetrics === 'function') hwMaybeRecalcLiveMetrics();
-  }
+  st.completedChallenges = [];
+  st.achievements = [];
+  st.futureRiskImprovement = 0;
 
   updateUI();
-  if (id !== 'aishwarya') {
-    if (typeof hwSyncHearingAgeUI === 'function') {
-      hwSyncHearingAgeUI(hwGetHearingAge(), hwGetChronologicalAge(), { skipSim: true });
-    }
-    if (typeof hwSyncWellnessScoreUI === 'function') {
-      hwSyncWellnessScoreUI(hwGetWellnessScore());
-    }
-  }
-  generateDailyChallenges();
-  generateHealthStreaks();
-  generateListeningTimeline();
+  if (typeof generateDailyChallenges === 'function') generateDailyChallenges();
+  if (typeof generateHealthStreaks === 'function') generateHealthStreaks();
+  if (typeof generateListeningTimeline === 'function') generateListeningTimeline();
   if (typeof wpDoneState_reset === 'function') wpDoneState_reset();
-  setTimeout(() => {
+  setTimeout(function () {
     if (typeof renderWellnessPlan === 'function') renderWellnessPlan();
     if (typeof canShowDashboard === 'function' && canShowDashboard() && typeof renderHomeEnhancements === 'function') {
       renderHomeEnhancements();
@@ -6642,9 +6581,8 @@ function renderPersonalizedRecommendations(p) {
   
   // Get Spotify stats if available for aishwarya
   let spotifyRecsHTML = '';
-  if (p?.id === 'aishwarya') {
-    const stats = (typeof hwSpotifyWeeklyStats === 'function' ? hwSpotifyWeeklyStats() : null)
-      || (DEMO_PROFILES.aishwarya && DEMO_PROFILES.aishwarya.spotify && DEMO_PROFILES.aishwarya.spotify.weeklyStats);
+  if (p?.id === 'user' || _spotifyConnected) {
+    const stats = (typeof hwSpotifyWeeklyStats === 'function' ? hwSpotifyWeeklyStats() : null);
     if (stats) {
     const spotifyRecs = generateSpotifyRecommendationsList(stats);
     if (spotifyRecs.length > 0) {
@@ -6699,8 +6637,8 @@ function renderPersonalizedRecommendations(p) {
   container.innerHTML = spotifyRecsHTML + quickTipsHTML;
   
   // Fetch available challenges from backend (if available, append them)
-  const profileId = p?.id || st?.profileId || 'aishwarya';
-  fetch(`/api/challenges/available/${profileId}`)
+  const pid = p.id || st.profileId || 'user';
+  fetch(`/api/challenges/available/${pid}`)
     .then(response => response.json())
     .then(data => {
       const challenges = data.challenges || [];
@@ -9461,7 +9399,7 @@ function showSpotifyCard() {
   
   // Show Spotify Connected Data card if profile has weekly stats
   const connectedCard = document.getElementById('spotifyConnectedCard');
-  const profile = DEMO_PROFILES.aishwarya;
+  const profile = st.profile || (typeof getDemoProfile === "function" ? getDemoProfile("user") : null);
   if (connectedCard && profile && profile.spotify && profile.spotify.weeklyStats) {
     connectedCard.style.display = 'block';
     updateSpotifyConnectedCard(profile.spotify.weeklyStats);
@@ -9538,7 +9476,7 @@ async function loadMorningRoutineProgress() {
     }
     
     // Refresh recommendations to show updated morning progress
-    const profile = DEMO_PROFILES.aishwarya;
+    const profile = st.profile || (typeof getDemoProfile === "function" ? getDemoProfile("user") : null);
     if (profile && profile.spotify && profile.spotify.weeklyStats) {
       generatePersonalizedRecommendations(profile.spotify.weeklyStats);
     }
@@ -9724,7 +9662,7 @@ async function checkCurrentTrackForMorningRoutine() {
         console.log(`[Morning Routine] Added ${duration} min. Total: ${st.morningRoutineProgress.minutes}`);
         
         // Refresh UI
-        const profile = DEMO_PROFILES.aishwarya;
+        const profile = st.profile || (typeof getDemoProfile === "function" ? getDemoProfile("user") : null);
         if (profile && profile.spotify && profile.spotify.weeklyStats) {
           generatePersonalizedRecommendations(profile.spotify.weeklyStats);
         }
@@ -10200,7 +10138,7 @@ function connectSpotifyOAuth(options) {
     return;
   }
   var usePopup = options.popup !== false;
-  localStorage.setItem('selectedProfile', (typeof st !== 'undefined' && st && st.profileId) || localStorage.getItem('selectedProfile') || 'aishwarya');
+  localStorage.setItem('selectedProfile', 'user');
 
   if (!usePopup) {
     window.location.href = '/login';
@@ -10477,7 +10415,7 @@ window._spotifyLive = window._spotifyLive || {
 };
 
 function hwGetLiveProfile() {
-  return (typeof DEMO_PROFILES !== 'undefined' && DEMO_PROFILES.aishwarya) ? DEMO_PROFILES.aishwarya : null;
+  return (typeof st !== 'undefined' && st && st.profile) ? st.profile : null;
 }
 
 function hwSpotifyWeeklyStats() {
@@ -10514,7 +10452,7 @@ function hwSyncSpotifyStatsToProfile(weeklyStats, exposureScore, profileData) {
     if (weeklyStats) st.spotify.weeklyStats = weeklyStats;
     if (exposureScore) st.spotify.exposureScore = exposureScore;
 
-    if (st.profileId === 'aishwarya' && st.profile) {
+    if (st.profile) {
       var wm = weeklyStats ? (weeklyStats.weeklyMinutes || 0) : 0;
       var tm = weeklyStats ? (weeklyStats.todayMinutes || 0) : 0;
       var estDb = (exposureScore && exposureScore.estimatedDb) ||
@@ -10600,7 +10538,7 @@ function hwSyncSpotifyStatsToProfile(weeklyStats, exposureScore, profileData) {
 }
 
 function hwIsLiveSpotifyProfile() {
-  return (typeof st !== 'undefined' && st && st.profileId === 'aishwarya');
+  return !!(typeof _spotifyConnected !== 'undefined' && _spotifyConnected);
 }
 
 function hwGetLiveDeviceVolume() {
@@ -10712,8 +10650,7 @@ function hwSpotifyVolumeLabel(band) {
 }
 
 function hwIsDemoProfileActive() {
-  var pid = (typeof st !== 'undefined' && st && st.profileId) ? st.profileId : '';
-  return pid === 'safe' || pid === 'student' || pid === 'highRisk';
+  return false;
 }
 
 /** Re-apply cached Spotify API stats onto st.profile (after profile switch). */
@@ -11751,7 +11688,7 @@ function connectSpotify(event) {
 }
 
 function connectSpotifyAndShowDashboard() {
-  localStorage.setItem('selectedProfile', (st && st.profileId) || 'aishwarya');
+  localStorage.setItem('selectedProfile', 'user');
   connectSpotifyOAuth({ popup: false });
 }
 
@@ -11769,7 +11706,7 @@ function continueWithDemo() {
    USER PROFILE SETUP — age & headphones (before dashboard)
 ═══════════════════════════════════════════════════════ */
 let _profileSetupStep = 1;
-let _profileSetupDraft = { age: null, headphoneType: null, sessionMusicPrefs: {}, sessionMusicCustom: {}, sessionSprintMins: {} };
+let _profileSetupDraft = { displayName: null, age: null, headphoneType: null, sessionMusicPrefs: {}, sessionMusicCustom: {}, sessionSprintMins: {} };
 
 const GATE_VIEWS = ['userProfileSetupView', 'spotifyConnectView', 'homeView'];
 
@@ -11841,7 +11778,7 @@ function needsUserProfileSetup() {
     const raw = localStorage.getItem('hearwise_user_profile');
     if (!raw) return true;
     const p = JSON.parse(raw);
-    return !(p.age && p.headphoneType);
+    return !(p.displayName && p.age && p.headphoneType);
   } catch (e) {
     return true;
   }
@@ -12355,10 +12292,15 @@ function profileSetupAfterSave() {
 function showUserProfileSetup() {
   setActiveGateView('userProfileSetupView');
   _profileSetupStep = 1;
-  _profileSetupDraft = { age: null, headphoneType: null, sessionMusicPrefs: {}, sessionMusicCustom: {}, sessionSprintMins: {} };
+  _profileSetupDraft = { displayName: null, age: null, headphoneType: null, sessionMusicPrefs: {}, sessionMusicCustom: {}, sessionSprintMins: {} };
   profileSetupGoToStep(1);
   const existing = getUserProfile();
   if (existing) {
+    if (existing.displayName) {
+      const nameEl = document.getElementById('setupName');
+      if (nameEl) nameEl.value = existing.displayName;
+      _profileSetupDraft.displayName = existing.displayName;
+    }
     if (existing.age) {
       const ageEl = document.getElementById('setupAge');
       if (ageEl) ageEl.value = existing.age;
@@ -12375,7 +12317,7 @@ function showUserProfileSetup() {
 
 function profileSetupGoToStep(step) {
   _profileSetupStep = step;
-  [1, 2].forEach(function(n) {
+  [1, 2, 3].forEach(function(n) {
     const panel = document.getElementById('profileSetupPanel' + n);
     if (panel) panel.style.display = n === step ? 'block' : 'none';
     const dot = document.querySelector('.profile-setup-dot[data-step="' + n + '"]');
@@ -12384,7 +12326,7 @@ function profileSetupGoToStep(step) {
   const backBtn = document.getElementById('profileSetupBackBtn');
   const nextBtn = document.getElementById('profileSetupNextBtn');
   if (backBtn) backBtn.style.display = step > 1 ? 'block' : 'none';
-  if (nextBtn) nextBtn.textContent = step === 2 ? 'Go to dashboard' : 'Continue';
+  if (nextBtn) nextBtn.textContent = step === 3 ? 'Go to dashboard' : 'Continue';
 }
 
 function selectSetupOption(kind, el) {
@@ -12399,6 +12341,17 @@ function profileSetupBack() {
 
 function profileSetupNext() {
   if (_profileSetupStep === 1) {
+    const name = String(document.getElementById('setupName') && document.getElementById('setupName').value || '').trim();
+    if (!name || name.length < 1) {
+      if (typeof showNotification === 'function') showNotification('Please enter your name');
+      else alert('Please enter your name');
+      return;
+    }
+    _profileSetupDraft.displayName = name;
+    profileSetupGoToStep(2);
+    return;
+  }
+  if (_profileSetupStep === 2) {
     const age = parseInt(document.getElementById('setupAge') && document.getElementById('setupAge').value, 10);
     if (!age || age < 13 || age > 100) {
       if (typeof showNotification === 'function') showNotification('Please enter your age (13–100)');
@@ -12406,22 +12359,22 @@ function profileSetupNext() {
       return;
     }
     _profileSetupDraft.age = age;
-    profileSetupGoToStep(2);
+    profileSetupGoToStep(3);
     return;
   }
-  if (_profileSetupStep === 2) {
+  if (_profileSetupStep === 3) {
     if (!_profileSetupDraft.headphoneType) {
       if (typeof showNotification === 'function') showNotification('Pick your headphone type');
       return;
     }
     submitUserProfileSetup();
-    return;
   }
 }
 
 function submitUserProfileSetup() {
   const existing = getUserProfile() || {};
   const profile = {
+    displayName: _profileSetupDraft.displayName,
     age: _profileSetupDraft.age,
     headphoneType: _profileSetupDraft.headphoneType,
     sessionMusicPrefs: mergeSessionMusicPrefs(existing.sessionMusicPrefs || {}),
@@ -12430,7 +12383,7 @@ function submitUserProfileSetup() {
     onboardedAt: existing.onboardedAt || new Date().toISOString()
   };
   applyUserProfileToApp(profile);
-  if (typeof showXpToast === 'function') showXpToast(10, 'Profile saved — you\'re ready for your dashboard');
+  if (typeof showXpToast === 'function') showXpToast(10, 'Welcome, ' + profile.displayName + '!');
   profileSetupAfterSave();
 }
 
@@ -12440,6 +12393,7 @@ function mergeUserProfileIntoState() {
   if (!up || !up.age) return;
 
   st.userProfile = up;
+  st.profile.name = up.displayName || st.profile.name || 'You';
   st.profile.chronologicalAge = Number(up.age);
   st.profile.headphoneType = up.headphoneType;
   st.profile.userDailyListening = up.dailyListening;
@@ -12479,7 +12433,7 @@ function applyUserProfileToApp(profile) {
   st.userProfile = profile;
   mergeUserProfileIntoState();
   if (typeof hwRefreshSessionClassifierModes === 'function') hwRefreshSessionClassifierModes();
-  if (typeof hwLsRenderAll === 'function') hwLsRenderAll();
+  if (typeof loadUserProfile === 'function') loadUserProfile();
 
   if (typeof updateMLPredictionWithProfile === 'function') {
     updateMLPredictionWithProfile({
@@ -12491,8 +12445,9 @@ function applyUserProfileToApp(profile) {
 
   if (typeof auraCoachSay === 'function') {
     const hpLabel = { 'over-ear': 'over-ear headphones', earbuds: 'earbuds', 'noise-canceling': 'noise-canceling headphones' };
+    const name = profile.displayName ? ('Nice to meet you, ' + profile.displayName + '. ') : '';
     auraCoachSay(
-      'Got it — age ' + profile.age + ', ' + (hpLabel[profile.headphoneType] || 'headphones') + '. I\'ll tailor your volume targets and hearing age to match.',
+      name + 'Age ' + profile.age + ', ' + (hpLabel[profile.headphoneType] || 'headphones') + '. I\'ll tailor your volume targets and hearing age to match.',
       []
     );
   }
@@ -12504,13 +12459,6 @@ function disconnectSpotify() {
     .then(data => {
       if (data.success) {
         // Update profile state
-        if (DEMO_PROFILES.aishwarya) {
-          DEMO_PROFILES.aishwarya.spotify.connected = false;
-          DEMO_PROFILES.aishwarya.spotify.profile = null;
-          DEMO_PROFILES.aishwarya.spotify.currentTrack = null;
-          DEMO_PROFILES.aishwarya.spotify.weeklyStats = null;
-          DEMO_PROFILES.aishwarya.spotify.exposureScore = null;
-        }
         if (typeof st !== 'undefined' && st) {
           st.spotify = { connected: false };
         }
@@ -12565,10 +12513,6 @@ async function checkSpotifyConnection() {
         st.spotify.connected = true;
       }
       // Update profile state
-      if (DEMO_PROFILES.aishwarya) {
-        DEMO_PROFILES.aishwarya.spotify.connected = true;
-      }
-      
       // Show connected state
       document.getElementById('spotifyNotConnected').style.display = 'none';
       document.getElementById('spotifyConnected').style.display = 'block';
@@ -12619,8 +12563,8 @@ async function loadSpotifyData() {
     
     if (typeof hwSyncSpotifyStatsToProfile === 'function') {
       hwSyncSpotifyStatsToProfile(null, null, profileData);
-    } else if (DEMO_PROFILES.aishwarya) {
-      DEMO_PROFILES.aishwarya.spotify.profile = profileData;
+    } else if (st && st.spotify) {
+      st.spotify.profile = profileData;
     }
 
     await loadWeeklyStats();
@@ -12677,8 +12621,8 @@ async function loadCurrentTrack() {
       if (typeof st !== 'undefined' && st && st.spotify) {
         st.spotify.currentTrack = data;
       }
-      if (DEMO_PROFILES.aishwarya) {
-        DEMO_PROFILES.aishwarya.spotify.currentTrack = data;
+      if (st && st.spotify) {
+        st.spotify.currentTrack = data;
       }
     } else {
       if (noTrack) noTrack.style.display = 'block';
@@ -12688,8 +12632,8 @@ async function loadCurrentTrack() {
       if (typeof st !== 'undefined' && st && st.spotify) {
         st.spotify.currentTrack = null;
       }
-      if (DEMO_PROFILES.aishwarya) {
-        DEMO_PROFILES.aishwarya.spotify.currentTrack = null;
+      if (st && st.spotify) {
+        st.spotify.currentTrack = null;
       }
     }
   } catch (err) {
@@ -12752,8 +12696,8 @@ async function loadWeeklyStats() {
     // Update profile state
     if (typeof hwSyncSpotifyStatsToProfile === 'function') {
       hwSyncSpotifyStatsToProfile(data, hwSpotifyExposureScore(), (st && st.spotify && st.spotify.profile) || null);
-    } else if (DEMO_PROFILES.aishwarya) {
-      DEMO_PROFILES.aishwarya.spotify.weeklyStats = data;
+    } else if (st && st.spotify) {
+      st.spotify.weeklyStats = data;
     }
 
     window._spotifyLive = window._spotifyLive || {};
@@ -12813,8 +12757,8 @@ async function loadExposureScore() {
     // Update profile state
     if (typeof hwSyncSpotifyStatsToProfile === 'function') {
       hwSyncSpotifyStatsToProfile(hwSpotifyWeeklyStats(), data, (st && st.spotify && st.spotify.profile) || null);
-    } else if (DEMO_PROFILES.aishwarya) {
-      DEMO_PROFILES.aishwarya.spotify.exposureScore = data;
+    } else if (st && st.spotify) {
+      st.spotify.exposureScore = data;
     }
 
     window._spotifyLive = window._spotifyLive || {};
@@ -12852,7 +12796,7 @@ function initDecibelSlider() {
       updateHearingSimulation();
       
       // Update hero section and weekly comparison in real-time
-      if (DEMO_PROFILES.aishwarya && DEMO_PROFILES.aishwarya.spotify.weeklyStats) {
+      if (st.spotify && st.spotify.weeklyStats) {
         updateHeroSectionWithSpotify();
         updateWeeklyComparison();
       }
@@ -12883,8 +12827,8 @@ function updateRealtimeRisk() {
       ? hwSpotifyVolToDb(typeof hwGetLiveDeviceVolume === 'function' ? hwGetLiveDeviceVolume() : 70)
       : currentDecibel);
     currentDecibel = db;
-  } else if (DEMO_PROFILES.aishwarya && DEMO_PROFILES.aishwarya.spotify.weeklyStats) {
-    weeklyHours = DEMO_PROFILES.aishwarya.spotify.weeklyStats.weeklyMinutes / 60;
+  } else if (st.spotify && st.spotify.weeklyStats) {
+    weeklyHours = st.spotify.weeklyStats.weeklyMinutes / 60;
   } else {
     weeklyHours = st.profile?.listeningData?.totals?.weeklyHours || 10;
   }
@@ -13211,11 +13155,11 @@ function updateListeningIntelligence() {
 }
 
 function updateFutureOutlook() {
-  if (!DEMO_PROFILES.aishwarya || !DEMO_PROFILES.aishwarya.spotify.weeklyStats) {
+  if (!st.spotify || !st.spotify.weeklyStats) {
     return;
   }
   
-  const stats = DEMO_PROFILES.aishwarya.spotify.weeklyStats;
+  const stats = st.spotify.weeklyStats;
   
   // Show Spotify projections section
   document.getElementById('spotifyFutureProjections').style.display = 'block';
@@ -13259,11 +13203,11 @@ function updateFutureOutlook() {
 }
 
 function updateSpotifyRecommendations() {
-  if (!DEMO_PROFILES.aishwarya || !DEMO_PROFILES.aishwarya.spotify.weeklyStats) {
+  if (!st.spotify || !st.spotify.weeklyStats) {
     return;
   }
   
-  const stats = DEMO_PROFILES.aishwarya.spotify.weeklyStats;
+  const stats = st.spotify.weeklyStats;
   const survey = st.surveyData;
   
   // Show Spotify recommendations section
@@ -13399,11 +13343,11 @@ function updateSpotifyRecommendations() {
 }
 
 function updateSpotifyProgress() {
-  if (!DEMO_PROFILES.aishwarya || !DEMO_PROFILES.aishwarya.spotify.weeklyStats) {
+  if (!st.spotify || !st.spotify.weeklyStats) {
     return;
   }
   
-  const stats = DEMO_PROFILES.aishwarya.spotify.weeklyStats;
+  const stats = st.spotify.weeklyStats;
   
   // Show Spotify progress section
   document.getElementById('spotifyProgress').style.display = 'block';
@@ -14254,7 +14198,7 @@ function obFinishOnboarding() {
   }
   var modal = document.getElementById('onboardingModal');
   if (modal) modal.style.display = 'none';
-  if (typeof selectProfile === 'function') selectProfile(st.profileId || 'aishwarya');
+  if (typeof selectProfile === 'function') selectProfile(st.profileId || 'user');
 }
 
 function skipOnboarding() {
@@ -14543,37 +14487,30 @@ function showChallengeCompletionNotification(challenge, impact) {
 }
 
 function refreshProfileSidebarMeta() {
-  ['safe', 'student', 'highRisk'].forEach((id) => {
-    const p = getEnrichedDemoProfile(id);
-    const meta = document.querySelector('[data-profile-meta="' + id + '"]');
-    if (meta && p && p.listeningData && p.listeningData.totals) {
-      const hrs = p.listeningData.totals.weeklyHours;
-      meta.textContent = hrs + 'h/wk · ' + p.weeklyExposure.dosePercent + '% dose · Score ' + p.healthScore + '/100';
-    }
-  });
-  var aishMeta = document.querySelector('[data-profile-meta="aishwarya"]');
-  if (aishMeta) {
-    var ws = typeof hwSpotifyWeeklyStats === 'function' ? hwSpotifyWeeklyStats() : null;
-    var ex = typeof hwSpotifyExposureScore === 'function' ? hwSpotifyExposureScore() : null;
-    var live = window._spotifyLive || {};
-    if (ws && ws.weeklyMinutes != null) {
-      var merged = typeof hwMergeLiveSessionMinutes === 'function'
-        ? hwMergeLiveSessionMinutes(ws.todayMinutes, ws.weeklyMinutes) : ws;
-      var hrs = (merged.weeklyMinutes / 60).toFixed(1);
-      var dose = (st && st.profile && st.profile.weeklyExposure && st.profile.weeklyExposure.dosePercent != null)
-        ? st.profile.weeklyExposure.dosePercent
-        : ((ex && ex.weeklyExposurePercent != null) ? ex.weeklyExposurePercent : '—');
-      var score = (st && st.hearingHealthScore != null) ? st.hearingHealthScore : '—';
-      var vol = typeof hwGetLiveDeviceVolume === 'function' ? hwGetLiveDeviceVolume() : null;
-      var liveTag = live.isPlaying ? ' · ▶ Live' : (_spotifyConnected ? ' · Spotify' : '');
-      aishMeta.textContent = hrs + 'h/wk · ' + dose + '% dose · ' + score + '/100' +
-        (vol != null ? ' · ' + vol + '% vol' : '') + liveTag;
-    } else if (_spotifyConnected) {
-      aishMeta.textContent = '🔴 Spotify connected — syncing…';
-    } else {
-      aishMeta.textContent = '🔴 Connect Spotify for live data';
-    }
+  updateUserProfileLabels();
+  var meta = document.getElementById('sidebarUserProfileMeta');
+  var drawerMeta = document.getElementById('drawerUserProfileMeta');
+  var ws = typeof hwSpotifyWeeklyStats === 'function' ? hwSpotifyWeeklyStats() : null;
+  var ex = typeof hwSpotifyExposureScore === 'function' ? hwSpotifyExposureScore() : null;
+  var live = window._spotifyLive || {};
+  var line = 'Private · this device only';
+  if (ws && ws.weeklyMinutes != null) {
+    var merged = typeof hwMergeLiveSessionMinutes === 'function'
+      ? hwMergeLiveSessionMinutes(ws.todayMinutes, ws.weeklyMinutes) : ws;
+    var hrs = (merged.weeklyMinutes / 60).toFixed(1);
+    var dose = (st && st.profile && st.profile.weeklyExposure && st.profile.weeklyExposure.dosePercent != null)
+      ? st.profile.weeklyExposure.dosePercent
+      : ((ex && ex.weeklyExposurePercent != null) ? ex.weeklyExposurePercent : '—');
+    var score = (st && st.hearingHealthScore != null) ? st.hearingHealthScore : '—';
+    var vol = typeof hwGetLiveDeviceVolume === 'function' ? hwGetLiveDeviceVolume() : null;
+    var liveTag = live.isPlaying ? ' · ▶ Live' : (_spotifyConnected ? ' · Spotify' : '');
+    line = hrs + 'h/wk · ' + dose + '% dose · ' + score + '/100' +
+      (vol != null ? ' · ' + vol + '% vol' : '') + liveTag;
+  } else if (_spotifyConnected) {
+    line = 'Spotify connected — syncing your listening data…';
   }
+  if (meta) meta.textContent = line;
+  if (drawerMeta) drawerMeta.textContent = line;
 }
 
 async function initSpotifyStatus() {
@@ -14593,7 +14530,7 @@ function enterHearWiseDashboard() {
 
   if (typeof mergeUserProfileIntoState === 'function') mergeUserProfileIntoState();
 
-  if (st.profileId && st.profileId !== 'aishwarya') {
+    if (typeof st !== 'undefined' && st && st.profileId && st.profileId !== 'user') {
     if (typeof lpSeedProfileDemoPlan === 'function') lpSeedProfileDemoPlan(true);
     if (typeof hwLsSeedProfileDemo === 'function') hwLsSeedProfileDemo();
     if (typeof hwApplyDemoProfileLiveState === 'function') hwApplyDemoProfileLiveState();
@@ -14679,14 +14616,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   refreshProfileSidebarMeta();
   
-  // Restore saved profile if available (e.g., after Spotify authentication)
-  const savedProfile = localStorage.getItem('selectedProfile');
-  if (savedProfile) {
-    selectProfile(savedProfile);
-    localStorage.removeItem('selectedProfile'); // Clear after use
-  } else {
-    selectProfile('aishwarya');
-  }
+  loadUserProfile();
 
   initDecibelSlider();
 
@@ -14761,7 +14691,7 @@ function submitOnboarding(event) {
   refreshDashboardWithSurvey();
   
   // Show Spotify Connect card if Aishwarya profile is selected
-  if (st.profileId === 'aishwarya') {
+  if (_spotifyConnected && typeof loadUserProfile === 'function') {
     const spotifyConnectCard = document.getElementById('spotifyConnectCard');
     if (spotifyConnectCard) {
       spotifyConnectCard.style.display = 'block';
@@ -14795,7 +14725,7 @@ function showExplainability(metric) {
   
   // Get current metrics
   const avgVolume = currentDecibel || 75;
-  const spotifyData = DEMO_PROFILES.aishwarya?.spotify?.weeklyStats;
+  const spotifyData = (typeof hwSpotifyWeeklyStats === "function" ? hwSpotifyWeeklyStats() : null);
   
   let weeklyHours = 10;
   let sessionCount = 5;
@@ -14928,7 +14858,7 @@ function populateScenarioProjections(scenario) {
   const currentAge = parseInt(document.getElementById('heroAge').textContent) || 25;
   const currentRisk = document.getElementById('heroRisk').textContent || 'Moderate';
   const avgVolume = currentDecibel || 75;
-  const spotifyData = DEMO_PROFILES.aishwarya?.spotify?.weeklyStats;
+  const spotifyData = (typeof hwSpotifyWeeklyStats === "function" ? hwSpotifyWeeklyStats() : null);
   
   let weeklyHours = 10;
   let sessionCount = 5;
@@ -14998,7 +14928,7 @@ populateFutureOutlookView = function() {
 // Daily Challenges Functions
 function generateDailyChallenges() {
   const avgVolume = currentDecibel || 75;
-  const spotifyData = DEMO_PROFILES.aishwarya?.spotify?.weeklyStats;
+  const spotifyData = (typeof hwSpotifyWeeklyStats === "function" ? hwSpotifyWeeklyStats() : null);
   
   let weeklyHours = 10;
   let sessionCount = 5;
@@ -15452,7 +15382,7 @@ function initAchievementBadges() {
 // Health Streaks Functions
 function generateHealthStreaks() {
   const avgVolume = currentDecibel || 75;
-  const spotifyData = DEMO_PROFILES.aishwarya?.spotify?.weeklyStats;
+  const spotifyData = (typeof hwSpotifyWeeklyStats === "function" ? hwSpotifyWeeklyStats() : null);
   
   let weeklyHours = 10;
   let sessionCount = 5;
@@ -15539,7 +15469,7 @@ function generateHealthStreaks() {
 
 // Improve Score Functions
 function generateListeningTimeline() {
-  const spotifyData = DEMO_PROFILES.aishwarya?.spotify?.weeklyStats;
+  const spotifyData = (typeof hwSpotifyWeeklyStats === "function" ? hwSpotifyWeeklyStats() : null);
   
   if (!spotifyData || !spotifyData.sessions || spotifyData.sessions.length === 0) {
     document.getElementById('listeningTimeline').innerHTML = `
@@ -15674,7 +15604,7 @@ function showWeeklyCheckInModal() {
   
   // Populate analytics summary
   const avgVolume = currentDecibel || 75;
-  const spotifyData = DEMO_PROFILES.aishwarya?.spotify?.weeklyStats;
+  const spotifyData = (typeof hwSpotifyWeeklyStats === "function" ? hwSpotifyWeeklyStats() : null);
   
   let weeklyHours = 10;
   let sessionCount = 5;
@@ -15715,7 +15645,7 @@ function submitWeeklyCheckIn() {
   
   // Get analytics data
   const avgVolume = currentDecibel || 75;
-  const spotifyData = DEMO_PROFILES.aishwarya?.spotify?.weeklyStats;
+  const spotifyData = (typeof hwSpotifyWeeklyStats === "function" ? hwSpotifyWeeklyStats() : null);
   
   let weeklyHours = 10;
   let sessionCount = 5;
@@ -15805,7 +15735,7 @@ function generateImproveScoreRecommendations() {
   // Get current metrics
   const currentScore = parseInt(document.getElementById('heroScore').textContent) || 50;
   const avgVolume = currentDecibel || 75;
-  const spotifyData = DEMO_PROFILES.aishwarya?.spotify?.weeklyStats;
+  const spotifyData = (typeof hwSpotifyWeeklyStats === "function" ? hwSpotifyWeeklyStats() : null);
   
   let weeklyHours = 10;
   let sessionCount = 5;
@@ -15970,7 +15900,7 @@ function addChatMessage(message, sender) {
 function generateCoachResponse(question) {
   const lowerQuestion = question.toLowerCase();
   const profile = st.profile;
-  const spotifyData = DEMO_PROFILES.aishwarya?.spotify?.weeklyStats;
+  const spotifyData = (typeof hwSpotifyWeeklyStats === "function" ? hwSpotifyWeeklyStats() : null);
   
   // Get actual metrics
   let weeklyHours = 0;
@@ -16208,8 +16138,8 @@ function updateWeeklyComparisonWithSurvey() {
 var hcActionsDone = {};
 
 function renderHearingCoach() {
-  const p = st.profile || getEnrichedDemoProfile(st.profileId || 'student');
-  const pid = p.id || st.profileId || 'student';
+  const p = st.profile || getEnrichedDemoProfile('user');
+  const pid = p.id || st.profileId || 'user';
   const pred = st.prediction || p.prediction;
   const hf = pred && pred.hearingFuture ? pred.hearingFuture : null;
   const inp = pred && pred.inputs ? pred.inputs : null;
@@ -16220,7 +16150,7 @@ function renderHearingCoach() {
     : (hf ? hf.currentHealthScore : (p.healthScore || 70));
   const weeklyDose = inp ? inp.weeklyDosePercent : (p.weeklyExposure ? p.weeklyExposure.dosePercent : 50);
   const dailyHours = inp ? inp.weeklyHours / 7 : (p.listeningData ? p.listeningData.totals.weeklyHours / 7 : 2);
-  const riskLevel = hf ? hf.currentRisk.category : (pid === 'highRisk' ? 'high' : pid === 'student' ? 'elevated' : 'low');
+  const riskLevel = hf ? hf.currentRisk.category : (weeklyDose > 80 ? 'high' : weeklyDose > 55 ? 'elevated' : 'low');
   const hearingAge = typeof hwGetHearingAge === 'function'
     ? hwGetHearingAge()
     : ((typeof resolveHearingAge === 'function')
@@ -16250,8 +16180,8 @@ function renderHearingCoach() {
   if (barsEl) {
     const volumeScore = Math.max(0, 100 - Math.max(0, weeklyDose - 50));
     const durationScore = Math.max(0, 100 - dailyHours * 12);
-    const consistencyScore = pid === 'safe' ? 88 : pid === 'student' ? 60 : pid === 'highRisk' ? 28 : 72;
-    const breakScore = pid === 'safe' ? 90 : pid === 'student' ? 55 : pid === 'highRisk' ? 20 : 70;
+    const consistencyScore = Math.round(Math.min(100, score * 0.9));
+    const breakScore = Math.round(Math.min(100, Math.max(20, 100 - weeklyDose * 0.6)));
     const bars = [
       { label: 'Volume Safety', val: Math.round(Math.min(100,volumeScore)), color: '#0EA5E9' },
       { label: 'Daily Duration', val: Math.round(Math.min(100,durationScore)), color: '#38BDF8' },
@@ -16288,16 +16218,16 @@ function renderHearingCoach() {
 
   /* ── 3. RECOMMENDED ACTIONS ── */
   const allActions = [
-    { id:'vol', icon:'🔉', bg:'rgba(14,165,233,0.15)', title:'Lower volume by 10% for your next session', impact:'Reduces weekly exposure by ~18 dB·hrs', profiles:['student','highRisk','aishwarya'] },
-    { id:'brk', icon:'☕', bg:'rgba(16,185,129,0.15)', title:'Take a 5-minute break every 60 minutes', impact:'Cuts fatigue risk by up to 40%', profiles:['student','highRisk','aishwarya','safe'] },
-    { id:'mon', icon:'📊', bg:'rgba(129,140,248,0.15)', title:'Enable volume monitoring alerts', impact:'Prevents accidental spikes above 85 dB', profiles:['highRisk','student'] },
-    { id:'nit', icon:'🌙', bg:'rgba(251,191,36,0.15)', title:'Use night-mode listening (max 60 dB after 9pm)', impact:'Protects against fatigue-related overexposure', profiles:['student','highRisk'] },
-    { id:'ear', icon:'🎧', bg:'rgba(16,185,129,0.15)', title:'Switch to noise-cancelling headphones', impact:'Allows safe listening at 10 dB lower volume', profiles:['highRisk'] },
-    { id:'str', icon:'🔥', bg:'rgba(14,165,233,0.15)', title:'Maintain your safe listening streak today', impact:'Every day counts toward your 7-day badge', profiles:['safe','aishwarya'] },
+    { id:'vol', icon:'🔉', bg:'rgba(14,165,233,0.15)', title:'Lower volume by 10% for your next session', impact:'Reduces weekly exposure by ~18 dB·hrs' },
+    { id:'brk', icon:'☕', bg:'rgba(16,185,129,0.15)', title:'Take a 5-minute break every 60 minutes', impact:'Cuts fatigue risk by up to 40%' },
+    { id:'mon', icon:'📊', bg:'rgba(129,140,248,0.15)', title:'Enable volume monitoring alerts', impact:'Prevents accidental spikes above 85 dB' },
+    { id:'nit', icon:'🌙', bg:'rgba(251,191,36,0.15)', title:'Use night-mode listening (max 60 dB after 9pm)', impact:'Protects against fatigue-related overexposure' },
+    { id:'ear', icon:'🎧', bg:'rgba(16,185,129,0.15)', title:'Switch to noise-cancelling headphones', impact:'Allows safe listening at 10 dB lower volume' },
+    { id:'str', icon:'🔥', bg:'rgba(14,165,233,0.15)', title:'Maintain your safe listening streak today', impact:'Every day counts toward your 7-day badge' },
   ];
   const actionsEl = document.getElementById('hcActions');
   if (actionsEl) {
-    const relevant = allActions.filter(a => a.profiles.includes(pid)).slice(0, 4);
+    const relevant = allActions.slice(0, 4);
     actionsEl.innerHTML = relevant.map(a => {
       const done = hcActionsDone[a.id];
       return `<div class="hc-action">
@@ -16369,13 +16299,13 @@ function renderHearingCoach() {
   const achEl = document.getElementById('hcAchievements');
   if (achEl) {
     const all = [
-      { emoji:'🛡️', name:'Safe Listener',     desc:'7 consecutive safe days',       earned: pid === 'safe' || pid === 'aishwarya' },
-      { emoji:'🔇', name:'Volume Master',      desc:'Kept below 75 dB all week',      earned: pid === 'safe' },
-      { emoji:'🔥', name:'7-Day Streak',       desc:'7 safe listening days in a row', earned: pid === 'safe' },
-      { emoji:'🦸', name:'Hearing Hero',       desc:'Score above 80 for a month',     earned: pid === 'safe' },
-      { emoji:'📉', name:'Risk Reducer',       desc:'Cut weekly dose by 20%+',        earned: pid === 'aishwarya' },
-      { emoji:'⏱️', name:'Break Master',      desc:'Took hourly breaks for 5 days',  earned: pid === 'safe' || pid === 'aishwarya' },
-      { emoji:'🎯', name:'Goal Crusher',       desc:'Hit 3 action goals this week',   earned: pid === 'aishwarya' },
+      { emoji:'🛡️', name:'Safe Listener',     desc:'7 consecutive safe days',       earned: score >= 80 },
+      { emoji:'🔇', name:'Volume Master',      desc:'Kept below 75 dB all week',      earned: score >= 85 },
+      { emoji:'🔥', name:'7-Day Streak',       desc:'7 safe listening days in a row', earned: score >= 78 },
+      { emoji:'🦸', name:'Hearing Hero',       desc:'Score above 80 for a month',     earned: score >= 82 },
+      { emoji:'📉', name:'Risk Reducer',       desc:'Cut weekly dose by 20%+',        earned: weeklyDose <= 60 },
+      { emoji:'⏱️', name:'Break Master',      desc:'Took hourly breaks for 5 days',  earned: score >= 75 },
+      { emoji:'🎯', name:'Goal Crusher',       desc:'Hit 3 action goals this week',   earned: Object.keys(hcActionsDone).length >= 3 },
       { emoji:'🌙', name:'Night Owl (Safe)',   desc:'Safe listening after 9pm',       earned: false },
     ];
     achEl.innerHTML = all.map(a => `

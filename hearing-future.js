@@ -765,22 +765,10 @@ function buildDisplayRecommendations(prediction, profile) {
 }
 
 const PROFILE_BEHAVIOR_TIPS = {
-  safe: [
+  user: [
     {
-      action: 'Keep daily listening to about 90 minutes or less when possible.',
-      benefit: 'Stays within a comfortable safe range for long-term hearing wellness.'
-    }
-  ],
-  student: [
-    {
-      action: 'On Wednesday-style study nights, reduce listening time and pause every hour.',
-      benefit: 'Targets your highest-exposure pattern without changing your whole routine.'
-    }
-  ],
-  highRisk: [
-    {
-      action: 'For gaming marathons, switch to speakers across the room or take a break between matches.',
-      benefit: 'Cuts ear-level loudness during your longest weekly sessions.'
+      action: 'Take a locked ear rest when HearWise prompts you — silence helps your ears recover fastest.',
+      benefit: 'Short breaks lower cumulative dose without giving up music.'
     }
   ]
 };

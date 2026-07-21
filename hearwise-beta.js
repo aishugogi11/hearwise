@@ -35,8 +35,14 @@
 
   function needsUserProfileSetupBeta() {
     if (!isBeta()) return null;
-    ensureMinimalProfile();
-    return false;
+    try {
+      var raw = localStorage.getItem('hearwise_user_profile');
+      if (!raw) return true;
+      var p = JSON.parse(raw);
+      return !p.displayName;
+    } catch (e) {
+      return true;
+    }
   }
 
   function needsMusicGenreSurveyBeta() {

@@ -238,11 +238,7 @@
   }
 
   function storageKey() {
-    var pid = 'safe';
-    if (typeof st !== 'undefined' && st && st.profileId && st.profileId !== 'aishwarya') {
-      pid = st.profileId;
-    }
-    return 'hearwise_ls_' + pid + '_' + todayKey();
+    return 'hearwise_ls_user_' + todayKey();
   }
 
   function normalizeMode(mode) {
