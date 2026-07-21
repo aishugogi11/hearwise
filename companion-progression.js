@@ -15,10 +15,10 @@
 
   var COMPANIONS = {
     echo_bunny: {
-      id: 'echo_bunny', name: 'Echo Bunny', emoji: '🐰', eggEmoji: '🥚', rarity: 'common',
+      id: 'echo_bunny', name: 'Echo Bunny', emoji: '🐰', rarity: 'common',
       starter: true,
-      stages: ['Echo Egg', 'Echo Bunny', 'Harmony Rabbit', 'Audio Guardian Rabbit'],
-      evolutionReq: [
+      stages: ['Young Echo Bunny', 'Echo Bunny', 'Harmony Rabbit', 'Audio Guardian'],
+      upgradeReq: [
         null,
         { focus: 1, sprints: 0, rests: 0, streak: 0 },
         { focus: 10, sprints: 5, rests: 15, streak: 3 },
@@ -26,34 +26,34 @@
       ]
     },
     rhythm_penguin: {
-      id: 'rhythm_penguin', name: 'Rhythm Penguin', emoji: '🐧', eggEmoji: '🥚', rarity: 'common',
+      id: 'rhythm_penguin', name: 'Rhythm Penguin', emoji: '🐧', rarity: 'common',
       unlock: { sprints: 3 },
-      stages: ['Rhythm Egg', 'Rhythm Penguin', 'Beat Guardian', 'Polar Conductor'],
-      evolutionReq: [null, { sprints: 3, rests: 2 }, { sprints: 15, rests: 10, streak: 3 }, { sprints: 40, rests: 30, streak: 7 }]
+      stages: ['Young Rhythm Penguin', 'Rhythm Penguin', 'Beat Guardian', 'Polar Conductor'],
+      upgradeReq: [null, { sprints: 3, rests: 2 }, { sprints: 15, rests: 10, streak: 3 }, { sprints: 40, rests: 30, streak: 7 }]
     },
     melody_panda: {
-      id: 'melody_panda', name: 'Melody Panda', emoji: '🐼', eggEmoji: '🥚', rarity: 'uncommon',
+      id: 'melody_panda', name: 'Melody Panda', emoji: '🐼', rarity: 'uncommon',
       unlock: { rests: 5 },
-      stages: ['Melody Egg', 'Melody Panda', 'Dream Keeper', 'Moonlight Panda'],
-      evolutionReq: [null, { rests: 5 }, { rests: 20, focus: 5 }, { rests: 45, streak: 5 }]
+      stages: ['Young Melody Panda', 'Melody Panda', 'Dream Keeper', 'Moonlight Panda'],
+      upgradeReq: [null, { rests: 5 }, { rests: 20, focus: 5 }, { rests: 45, streak: 5 }]
     },
     harmony_owl: {
-      id: 'harmony_owl', name: 'Harmony Owl', emoji: '🦉', eggEmoji: '🥚', rarity: 'uncommon',
+      id: 'harmony_owl', name: 'Harmony Owl', emoji: '🦉', rarity: 'uncommon',
       unlock: { focus: 2 },
-      stages: ['Harmony Egg', 'Harmony Owl', 'Study Sage', 'Night Listener'],
-      evolutionReq: [null, { focus: 2 }, { focus: 12, rests: 8 }, { focus: 35, rests: 25, streak: 5 }]
+      stages: ['Young Harmony Owl', 'Harmony Owl', 'Study Sage', 'Night Listener'],
+      upgradeReq: [null, { focus: 2 }, { focus: 12, rests: 8 }, { focus: 35, rests: 25, streak: 5 }]
     },
     sonic_fox: {
-      id: 'sonic_fox', name: 'Sonic Fox', emoji: '🦊', eggEmoji: '🥚', rarity: 'rare',
+      id: 'sonic_fox', name: 'Sonic Fox', emoji: '🦊', rarity: 'rare',
       unlock: { streak: 7 },
-      stages: ['Sonic Egg', 'Sonic Fox', 'Pulse Runner', 'Frequency Fox'],
-      evolutionReq: [null, { streak: 3 }, { streak: 7, focus: 10 }, { streak: 14, sprints: 25 }]
+      stages: ['Young Sonic Fox', 'Sonic Fox', 'Pulse Runner', 'Frequency Fox'],
+      upgradeReq: [null, { streak: 3 }, { streak: 7, focus: 10 }, { streak: 14, sprints: 25 }]
     },
     aurora_butterfly: {
-      id: 'aurora_butterfly', name: 'Aurora Butterfly', emoji: '🦋', eggEmoji: '🥚', rarity: 'rare',
+      id: 'aurora_butterfly', name: 'Aurora Butterfly', emoji: '🦋', rarity: 'rare',
       unlock: { wellnessDays: 3 },
-      stages: ['Aurora Cocoon', 'Aurora Butterfly', 'Prism Wing', 'Light Weaver'],
-      evolutionReq: [null, { rests: 10, sprints: 5 }, { rests: 25, focus: 15 }, { rests: 60, streak: 10 }]
+      stages: ['Young Aurora Butterfly', 'Aurora Butterfly', 'Prism Wing', 'Light Weaver'],
+      upgradeReq: [null, { rests: 10, sprints: 5 }, { rests: 25, focus: 15 }, { rests: 60, streak: 10 }]
     }
   };
 
@@ -93,7 +93,7 @@
     safe_session: { harmony: 10, care: 1, label: 'Safe listening session' },
     daily_quest: { harmony: 50, care: 5, resonance: 25, label: 'Daily quest complete' },
     first_session_today: { harmony: 10, care: 1, label: 'First session today' },
-    evolution: { harmony: 0, care: 0, resonance: 50, label: 'Evolution!' },
+    upgrade: { harmony: 0, care: 0, resonance: 50, label: 'Companion upgraded!' },
     zone_unlock: { harmony: 0, resonance: 40, label: 'Sanctuary expanded' }
   };
 
@@ -175,8 +175,11 @@
   function displayEmoji(companionId, data) {
     var c = COMPANIONS[companionId];
     if (!c) return '🐰';
-    if (data.stage === 0) return c.eggEmoji || '🥚';
     return c.emoji;
+  }
+
+  function tierNumber(stage) {
+    return Math.min(4, Math.max(1, (stage || 0) + 1));
   }
 
   function getAccessory(id) {
@@ -208,10 +211,11 @@
     return (data.xp || 0) % XP_PER_SUBLEVEL;
   }
 
-  function meetsEvolutionReq(companionId, stage, stats, coaching) {
+  function meetsUpgradeReq(companionId, stage, stats, coaching) {
     var c = COMPANIONS[companionId];
-    if (!c || !c.evolutionReq) return false;
-    var req = c.evolutionReq[stage];
+    var reqs = c && (c.upgradeReq || c.evolutionReq);
+    if (!c || !reqs) return false;
+    var req = reqs[stage];
     if (!req) return false;
     var streak = coaching && coaching.streak ? coaching.streak : 0;
     var totalRests = (stats.earRests || 0) + (stats.breaks || 0);
@@ -262,23 +266,23 @@
     });
   }
 
-  function tryEvolve(state, coaching) {
+  function tryUpgrade(state, coaching) {
     var active = getActiveCompanion(state);
     var data = active.data;
     var c = active.def;
     var nextStage = data.stage + 1;
     if (nextStage >= c.stages.length) return;
-    if (!meetsEvolutionReq(active.id, nextStage, state.stats, coaching)) return;
+    if (!meetsUpgradeReq(active.id, nextStage, state.stats, coaching)) return;
     if (data.energy < 30) {
-      state.lastNote = active.def.name + ' needs more energy to evolve — start a session or take a rest.';
+      state.lastNote = active.def.name + ' needs more energy to upgrade — start a session or take a rest.';
       return;
     }
     data.stage = nextStage;
     data.xp = 0;
     data.happiness = Math.min(100, (data.happiness || 80) + 15);
-    state.sanctuary.resonance += EVENT_REWARDS.evolution.resonance || 50;
-    state.lastNote = stageName(active.id, data.stage) + ' evolved! ✦';
-    notify('✦ ' + stageName(active.id, data.stage) + ' evolved!', 'Evolution');
+    state.sanctuary.resonance += EVENT_REWARDS.upgrade.resonance || 50;
+    state.lastNote = stageName(active.id, data.stage) + ' upgraded to Tier ' + tierNumber(data.stage) + '! ✦';
+    notify('⬆️ ' + stageName(active.id, data.stage) + ' — Tier ' + tierNumber(data.stage) + '!', 'Upgrade');
   }
 
   function applyEnergyHappiness(state, eventType) {
@@ -398,11 +402,11 @@
     applyEnergyHappiness(state, type);
     checkUnlocks(state, coaching);
     checkZoneUnlocks(state, coaching);
-    tryEvolve(state, coaching);
+    tryUpgrade(state, coaching);
 
     if (harmony > 0) {
       var active = getActiveCompanion(state);
-      state.lastNote = displayEmoji(active.id, active.data) + ' +' + harmony + ' Harmony · ' + rewards.label;
+      state.lastNote = displayEmoji(active.id, active.data) + ' +' + harmony + ' Upgrade Points · ' + rewards.label;
     }
 
     saveState(state);
@@ -500,6 +504,7 @@
       name: stageName(active.id, active.data.stage),
       emoji: displayEmoji(active.id, active.data),
       stage: active.data.stage,
+      tier: tierNumber(active.data.stage),
       xp: active.data.xp,
       xpPct: Math.round((subLevelProgress(active.data) / XP_PER_SUBLEVEL) * 100),
       energy: active.data.energy,
@@ -539,18 +544,23 @@
     state = state || loadState();
     var active = getActiveCompanion(state);
     var xpPct = Math.round((subLevelProgress(active.data) / XP_PER_SUBLEVEL) * 100);
+    var tier = tierNumber(active.data.stage);
+    var maxTier = active.def.stages.length;
     var mood = active.data.happiness >= 70 ? 'content' : active.data.happiness >= 45 ? 'quiet' : 'needs care';
-    var moodTxt = mood === 'content' ? 'Happy & growing' : mood === 'quiet' ? 'Resting — a session helps' : 'Send care — ear rest helps most';
+    var moodTxt = mood === 'content' ? 'Ready for the next tier' : mood === 'quiet' ? 'Resting — a session helps' : 'Send care — ear rest helps most';
     return '<div class="hw-companion-card" id="hwCompanionCard">' +
       '<div class="hw-companion-main">' +
-        '<div class="hw-companion-avatar" title="' + esc(active.def.name) + '">' + avatarPreviewHtml(state, 'sm') + '</div>' +
+        '<div class="hw-companion-avatar hw-companion-tier-' + active.data.stage + '" title="' + esc(active.def.name) + '">' +
+          '<span class="hw-companion-tier-badge">T' + tier + '</span>' +
+          avatarPreviewHtml(state, 'sm') +
+        '</div>' +
         '<div class="hw-companion-info">' +
           '<div class="hw-companion-name">' + esc(stageName(active.id, active.data.stage)) + '</div>' +
-          '<div class="hw-companion-mood">' + moodTxt + '</div>' +
+          '<div class="hw-companion-mood">Tier ' + tier + ' of ' + maxTier + ' · ' + moodTxt + '</div>' +
           '<div class="hw-companion-bars">' +
             '<span>⚡ ' + Math.round(active.data.energy) + '%</span>' +
             '<span>💜 ' + Math.round(active.data.happiness) + '%</span>' +
-            '<span>🎵 ' + xpPct + '% stage</span>' +
+            '<span>⬆️ ' + xpPct + '% to next tier</span>' +
           '</div>' +
           '<div class="hw-companion-xp-track"><div class="hw-companion-xp-fill" style="width:' + xpPct + '%"></div></div>' +
         '</div>' +
@@ -606,8 +616,9 @@
       '<div class="hw-sanc-card" role="dialog">' +
         '<button type="button" class="hw-sanc-close" onclick="hwCloseSanctuary()" aria-label="Close">×</button>' +
         '<h2 class="hw-sanc-title">🎵 Sound Sanctuary</h2>' +
-        '<p class="hw-sanc-sub">Your companions and habitats grow with focus, safe listening, and ear rests.</p>' +
-        '<div class="hw-sanc-hero">' + displayEmoji(active.id, active.data) + ' <strong>' + esc(stageName(active.id, active.data.stage)) + '</strong></div>' +
+        '<p class="hw-sanc-sub">Upgrade your animals with safe sprints, ear rests, and daily quests. Earn Upgrade Points + Resonance to unlock new tiers and gear.</p>' +
+        '<div class="hw-sanc-hero">' + displayEmoji(active.id, active.data) + ' <strong>' + esc(stageName(active.id, active.data.stage)) + '</strong> · Tier ' + tierNumber(active.data.stage) + '</div>' +
+        '<div class="hw-sanc-earn-hint">Sprint +15 · Ear rest +25 · Daily quest +50 Upgrade Points</div>' +
         '<div class="hw-sanc-weekly">' +
           '<div class="hw-sanc-weekly-label">Weekly Resonance Chest · ' + (state.weekly.dailyQuests || 0) + '/' + WEEKLY_QUEST_GOAL + ' daily quests</div>' +
           '<div class="hw-sanc-weekly-bar"><div class="hw-sanc-weekly-fill" style="width:' +
@@ -654,7 +665,7 @@
     return '<div class="hw-avatar-studio-card">' +
       '<div class="hw-avatar-studio-hd">' +
         '<div><div class="hw-avatar-studio-title">🎨 Companion Studio</div>' +
-        '<div class="hw-avatar-studio-sub">Earn Resonance from ear rests, quests, and evolutions — spend it to dress up your companion.</div></div>' +
+        '<div class="hw-avatar-studio-sub">Earn Resonance from ear rests, quests, and tier upgrades — spend it to dress up your companion.</div></div>' +
         '<span class="hw-companion-token">✨ ' + state.sanctuary.resonance + ' Resonance</span>' +
       '</div>' +
       '<div class="hw-avatar-studio-preview">' +
@@ -683,7 +694,7 @@
     var questStrip = document.getElementById('hwCompanionQuestStrip');
     if (questStrip) {
       var p = getPayload();
-      questStrip.innerHTML = p.emoji + ' <strong>' + p.name + '</strong> · ' + p.xpPct + '% to next evolution step';
+      questStrip.innerHTML = p.emoji + ' <strong>' + p.name + '</strong> · Tier ' + (p.tier || 1) + ' · ' + p.xpPct + '% to next upgrade';
       questStrip.style.display = 'block';
     }
   }
@@ -790,7 +801,7 @@
   global.hwSanctuaryBuyDecor = function (id) {
     var r = buyDecor(id);
     if (!r.ok && typeof global.showNotification === 'function') {
-      if (r.reason === 'insufficient') global.showNotification('Need more Resonance ✨ — complete weekly goals and evolutions.');
+      if (r.reason === 'insufficient') global.showNotification('Need more Resonance ✨ — complete ear rests, daily quests, and tier upgrades.');
       else if (r.reason === 'zone_locked') global.showNotification('Unlock that sanctuary zone first through healthy habits.');
     }
   };

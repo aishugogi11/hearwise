@@ -1670,6 +1670,12 @@ html[data-hw-beta="1"] .hw-beta-companion-wrap{margin-bottom:14px;}
 .hw-companion-card{background:linear-gradient(135deg,#f0fdf4,#faf5ff);border:1.5px solid rgba(16,185,129,.28);border-radius:16px;padding:12px 14px;}
 .hw-companion-main{display:flex;gap:12px;align-items:center;}
 .hw-companion-avatar{position:relative;font-size:36px;line-height:1;width:52px;height:52px;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:14px;border:1px solid var(--border);box-shadow:0 2px 8px rgba(0,0,0,.05);overflow:visible;}
+.hw-companion-tier-badge{position:absolute;top:-4px;right:-4px;font-size:9px;font-weight:900;color:#fff;background:linear-gradient(135deg,#8b5cf6,#6366f1);padding:2px 5px;border-radius:6px;line-height:1;z-index:2;box-shadow:0 1px 4px rgba(99,102,241,.35);}
+.hw-companion-tier-0 .hw-avatar-core{transform:scale(.88);opacity:.92;}
+.hw-companion-tier-1 .hw-avatar-core{transform:scale(.95);}
+.hw-companion-tier-2 .hw-avatar-core{transform:scale(1);}
+.hw-companion-tier-3 .hw-avatar-core{transform:scale(1.06);filter:drop-shadow(0 0 6px rgba(139,92,246,.35));}
+.hw-sanc-earn-hint{font-size:11px;font-weight:700;color:#4338ca;background:rgba(139,92,246,.08);padding:8px 10px;border-radius:10px;margin-bottom:12px;text-align:center;}
 .hw-avatar-preview{position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;}
 .hw-avatar-preview-lg{width:120px;height:120px;margin:0 auto;}
 .hw-avatar-preview-lg .hw-avatar-core{font-size:64px;line-height:1;}
@@ -18661,7 +18667,7 @@ const GAMIFY_ACHIEVEMENTS = [
   { id: 'session_sprint',  icon: '🏃', name: 'Session Sprinter',  desc: 'Keep 10 sessions under your safe limit', target: 10, progressKey: 'safeSessions' },
   { id: 'break_champion',  icon: '🏅', name: 'Break Champion',    desc: '7-day session-length streak',            target: 7,  progressKey: 'streak' },
   { id: 'ear_protector',   icon: '🏅', name: 'Ear Protector',     desc: 'Reach a 30-day safe-session streak',     target: 30, progressKey: 'streak' },
-  { id: 'first_evolution', icon: '🐰', name: 'First Evolution',   desc: 'Evolve your companion past the egg stage', target: 1, progressKey: 'companionStage' },
+  { id: 'first_evolution', icon: '🐰', name: 'First Upgrade',   desc: 'Upgrade your companion to Tier 2', target: 1, progressKey: 'companionStage' },
   { id: 'rest_keeper',     icon: '☕', name: 'Rest Keeper',       desc: 'Complete 15 ear rests for your companions', target: 15, progressKey: 'companionRests' },
   { id: 'focus_guardian',  icon: '🎯', name: 'Focus Guardian',    desc: 'Complete 10 focus blocks',               target: 10, progressKey: 'companionFocus' },
 ];
@@ -20904,7 +20910,7 @@ function lpGetWellnessTips(score, sessions) {
   var longest = sessions.length ? Math.max.apply(null, sessions.map(function(s) { return s.durationMin; })) : 0;
   if (total > 180) tips.push('You listened for ' + lpFormatDuration(total) + ' today — try shortening sessions or adding ear rests.');
   if (longest > 60) tips.push('Your longest stretch is ' + lpFormatDuration(longest) + '. Take a locked ear rest to recover.');
-  if (score >= 85) tips.push('Great habits! Accept your Daily Quest — Aura tracks sprints and ear rests to grow your companion.');
+  if (score >= 85) tips.push('Great habits! Accept your Daily Quest — Aura tracks sprints and ear rests to upgrade your companion.');
   if (!tips.length) tips.push('Connect Spotify and take ear rests when prompted — you\'ll earn Resonance to decorate your companion.');
   return tips.slice(0, 2);
 }
@@ -20950,7 +20956,7 @@ function lpAuraGuideMessage(stepIdx) {
        (score < 80 ? ' There\'s room to improve — I\'ll show you how.' : ' Looking good so far!'),
     1: 'This is <strong>Live Ear Recovery</strong>. Connect Spotify and I\'ll track your noise dose, run safe-listening sprints, and <strong>lock a mandatory ear-rest timer</strong> when limits are hit. No headphones during recovery.',
     2: 'Daily mission is on your <strong>Home</strong> tab now: <strong>' + mission.title + '</strong>. ' + mission.desc.split('.')[0] + '.',
-    3: 'Your Daily Quest tracks ear habits from safe-listening sprints and ear rests — complete them to grow your companion and extend your streak.',
+    3: 'Your Daily Quest tracks ear habits from safe-listening sprints and ear rests — complete them to upgrade your companion and extend your streak.',
     4: score >= 85
       ? 'Strong plan! Ear Score is <strong>' + score + '/100</strong>. Finish your mission and habits to keep it there.'
       : 'To boost your Ear Score: ' + (tips[0] || 'use locked ear rests and keep volume under your cap.') +

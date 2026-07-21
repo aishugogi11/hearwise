@@ -75,7 +75,7 @@
     if (title) title.textContent = 'Your daily study companion';
     var headerSub = document.getElementById('dashboardHeaderSub');
     if (headerSub) {
-      headerSub.textContent = 'Finish today\'s quest to grow your companion and protect your ears while you listen.';
+      headerSub.textContent = 'Finish today\'s quest to upgrade your companion and protect your ears while you listen.';
     }
   }
 
@@ -196,7 +196,7 @@
     if (pct >= 100) {
       el.textContent = 'Quest complete! Your streak is locked for today. See you tomorrow.';
     } else if (pts.sprints >= 1 && pts.rests < 1) {
-      el.textContent = 'Sprint done — take your ear rest to finish today\'s quest and grow your companion.';
+      el.textContent = 'Sprint done — take your ear rest to finish today\'s quest and upgrade your companion.';
     } else if (pts.sprints < 1) {
       el.textContent = 'Press play on Spotify, open Recovery Tracker, and complete one safe sprint to start.';
     } else {
