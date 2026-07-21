@@ -575,33 +575,8 @@ body.break-mode .ring-progress { stroke: var(--coral); }
 .history-meta { text-align: right; }
 
 .how-it-works {
-  padding: 120px 0 80px;
+  padding: 56px 0 64px;
   text-align: center;
-}
-
-.how-it-works-intro {
-  margin: 0 0 28px;
-  padding: 8px 0 4px;
-  text-align: left;
-}
-
-.how-it-works-intro > h2 {
-  max-width: none;
-  margin: 0;
-  font-size: clamp(26px, 4vw, 34px);
-}
-
-.how-it-works-intro .steps {
-  margin-top: 22px;
-}
-
-.how-it-works-intro .steps article {
-  padding: 22px 24px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  border-top: 1px solid var(--line);
-  background: var(--card);
-  box-shadow: var(--shadow);
 }
 
 .how-it-works > h2 {
@@ -772,8 +747,7 @@ dialog p:not(.eyebrow) {
   .stat strong { font-size: 29px; }
   .volume-field { flex-direction: column; align-items: stretch; }
   .volume-note { text-align: center; }
-  .how-it-works:not(.how-it-works-intro) { padding-top: 85px; }
-  .how-it-works-intro .steps article { padding: 20px 18px; }
+  .how-it-works { padding: 48px 0 56px; }
   footer { align-items: flex-start; gap: 15px; }
 }
 
