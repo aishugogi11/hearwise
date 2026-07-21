@@ -592,33 +592,57 @@ body.break-mode .ring-progress { stroke: var(--coral); }
 }
 
 .steps {
-  margin-top: 45px;
+  margin-top: 36px;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 18px;
+  gap: 20px;
   text-align: left;
 }
 
-.steps article {
-  padding: 28px;
-  border-top: 1px solid #bfcac3;
+.step-card {
+  padding: 26px 24px 28px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.steps article > span {
-  color: var(--green);
-  font-family: Georgia, serif;
-  font-size: 25px;
+.step-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(14, 165, 233, 0.12);
 }
 
-.steps h3 {
-  margin: 20px 0 8px;
+.step-card-num {
+  width: 40px;
+  height: 40px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #e0f2fe, #f0f9ff);
+  color: #0284c7;
+  font-family: Outfit, sans-serif;
   font-size: 17px;
+  font-weight: 800;
+  line-height: 1;
 }
 
-.steps p {
-  margin-bottom: 0;
+.step-card h3 {
+  margin: 0 0 8px;
+  font-family: Outfit, sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+
+.step-card p {
+  margin: 0;
   color: var(--muted);
   font-size: 14px;
+  line-height: 1.55;
 }
 
 .wellness-note {
@@ -729,7 +753,7 @@ dialog p:not(.eyebrow) {
   .hero { margin-top: 38px; }
   .activity-section { grid-template-columns: 1fr; }
   .steps { grid-template-columns: 1fr; }
-  .steps article { padding: 22px 10px; }
+  .step-card { padding: 22px 20px 24px; }
   .wellness-note { grid-template-columns: 1fr; }
 }
 
