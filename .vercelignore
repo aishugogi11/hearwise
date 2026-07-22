@@ -1,0 +1,5 @@
+server.js
+database/
+data/
+.env*
+*.db

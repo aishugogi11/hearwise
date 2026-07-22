@@ -9,7 +9,8 @@
     "dev": "nodemon server.js",
     "train": "node ml/train.js",
     "test": "jest",
-    "build:static": "sh scripts/build-static.sh"
+    "build:static": "sh scripts/build-static.sh",
+    "deploy:web": "npm run build:static && vercel deploy dist --prod --yes"
   },
   "engines": {
     "node": ">=18"

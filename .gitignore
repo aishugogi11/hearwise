@@ -24,3 +24,5 @@ npm-debug.log*
 # Static build output (Vercel)
 dist/
 _site/
+.vercel
+.env*
