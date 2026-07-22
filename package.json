@@ -10,7 +10,7 @@
     "train": "node ml/train.js",
     "test": "jest",
     "build:static": "sh scripts/build-static.sh",
-    "deploy:web": "npm run build:static && vercel deploy dist --prod --yes"
+    "deploy:web": "vercel deploy --prod --yes --project hearwise"
   },
   "engines": {
     "node": ">=18"
