@@ -1,62 +1,12 @@
-name: Deploy public HearWise app
+# GitHub Pages deploy disabled — HearWise static site is deployed on Vercel.
+# See vercel.json and https://vercel.com/docs
+name: Deploy public HearWise app (disabled)
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "public/**"
-      - "index.html"
-      - "demo-profiles.js"
-      - "hearing-future.js"
-      - "coach-engine.js"
-      - "companion-progression.js"
-      - "hearwise-orchestrator.js"
-      - "session-classifier.js"
-      - "listening-sessions.js"
-      - "challenges.js"
-      - "hearwise-beta.js"
-      - ".github/workflows/deploy-public-app.yml"
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
-
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  notice:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Assemble public site and original app
-        run: |
-          mkdir -p _site/app
-          cp -R public/. _site/
-          cp public/feedback-widget.css public/feedback-widget.js public/manual-timer.css public/manual-timer.js _site/app/
-          cp index.html _site/app/
-          cp demo-profiles.js hearing-future.js coach-engine.js _site/app/
-          cp companion-progression.js hearwise-orchestrator.js session-classifier.js _site/app/
-          cp listening-sessions.js challenges.js hearwise-beta.js _site/app/
-          touch _site/.nojekyll
-
-      - name: Upload public site
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - run: echo "Deploy via Vercel instead. Connect the repo at https://vercel.com/new"

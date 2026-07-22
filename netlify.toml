@@ -1,0 +1,8 @@
+[build]
+  command = "npm run build:static"
+  publish = "dist"
+
+[[redirects]]
+  from = "/app"
+  to = "/app/index.html"
+  status = 200
